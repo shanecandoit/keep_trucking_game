@@ -10,7 +10,7 @@ const TRUCK_SPEED: f32 = 260.0;
 
 #[derive(Component)]
 pub struct Truck {
-    pub destination: Option<Vec3>,
+    pub route: Vec<Vec3>,
 }
 
 pub fn render(
@@ -22,7 +22,7 @@ pub fn render(
     let truck = commands
         .spawn((
             Transform::from_translation(world::grid_to_world(start).extend(2.0)),
-            Truck { destination: None },
+            Truck { route: Vec::new() },
         ))
         .id();
 
@@ -77,14 +77,14 @@ pub fn render(
 
 pub fn update(time: Res<Time>, trucks: &mut Query<(&mut Transform, &mut Truck)>) {
     for (mut transform, mut truck) in trucks.iter_mut() {
-        let Some(destination) = truck.destination else {
+        let Some(destination) = truck.route.first().copied() else {
             continue;
         };
         let distance = transform.translation.distance(destination);
         let step = TRUCK_SPEED * time.delta_secs();
         if distance <= step {
             transform.translation = destination;
-            truck.destination = None;
+            truck.route.remove(0);
         } else {
             transform.translation = transform.translation.move_towards(destination, step);
         }
@@ -110,11 +110,20 @@ pub fn update_clicks(
     let Ok(world_cursor) = camera.viewport_to_world_2d(camera_transform, cursor) else {
         return;
     };
-    let grid = world::world_to_grid(world_cursor);
-    if world::in_board(grid) {
-        let destination = world::grid_to_world(grid).extend(2.0);
-        for (_, mut truck) in trucks.iter_mut() {
-            truck.destination = Some(destination);
+    let clicked = world::world_to_grid(world_cursor);
+    let target = world::building_at(clicked)
+        .map(|building| building.entrance)
+        .or_else(|| world::is_road(clicked).then_some(clicked));
+    let Some(target) = target else { return };
+
+    for (transform, mut truck) in trucks.iter_mut() {
+        let start = world::world_to_grid(transform.translation.truncate());
+        if let Some(path) = world::road_path(start, target) {
+            truck.route = path
+                .into_iter()
+                .skip(1)
+                .map(|grid| world::grid_to_world(grid).extend(2.0))
+                .collect();
         }
     }
 }

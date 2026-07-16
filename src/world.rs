@@ -1,11 +1,40 @@
 use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
+use std::collections::{HashMap, VecDeque};
 
 pub const BOARD_WIDTH: i32 = 9;
 pub const BOARD_HEIGHT: i32 = 9;
 pub const TILE_WIDTH: f32 = 86.0;
 pub const TILE_HEIGHT: f32 = 43.0;
+
+#[derive(Component, Clone, Copy)]
+pub struct Building;
+
+#[derive(Clone, Copy)]
+pub struct BuildingSpec {
+    pub grid: IVec2,
+    pub entrance: IVec2,
+}
+
+const BUILDINGS: [BuildingSpec; 4] = [
+    BuildingSpec {
+        grid: IVec2::new(1, 4),
+        entrance: IVec2::new(2, 4),
+    },
+    BuildingSpec {
+        grid: IVec2::new(7, 4),
+        entrance: IVec2::new(6, 4),
+    },
+    BuildingSpec {
+        grid: IVec2::new(4, 1),
+        entrance: IVec2::new(4, 2),
+    },
+    BuildingSpec {
+        grid: IVec2::new(4, 7),
+        entrance: IVec2::new(4, 6),
+    },
+];
 
 pub fn render(
     commands: &mut Commands,
@@ -19,7 +48,9 @@ pub fn render(
     for y in 0..BOARD_HEIGHT {
         for x in 0..BOARD_WIDTH {
             let grid = IVec2::new(x, y);
-            let material = if (x + y) % 2 == 0 {
+            let material = if is_road(grid) {
+                light.clone()
+            } else if (x + y) % 2 == 0 {
                 dark.clone()
             } else {
                 light.clone()
@@ -31,6 +62,145 @@ pub fn render(
                 Transform::from_translation(grid_to_world(grid).extend(0.0)),
             ));
         }
+    }
+
+    render_buildings(commands, meshes, materials);
+}
+
+pub fn is_road(grid: IVec2) -> bool {
+    in_board(grid) && (grid.x == BOARD_WIDTH / 2 || grid.y == BOARD_HEIGHT / 2)
+}
+
+pub fn building_specs() -> &'static [BuildingSpec] {
+    &BUILDINGS
+}
+
+pub fn building_at(grid: IVec2) -> Option<BuildingSpec> {
+    BUILDINGS
+        .iter()
+        .copied()
+        .find(|building| building.grid == grid)
+}
+
+pub fn road_path(start: IVec2, target: IVec2) -> Option<Vec<IVec2>> {
+    if !is_road(start) || !is_road(target) {
+        return None;
+    }
+
+    let mut frontier = VecDeque::from([start]);
+    let mut came_from = HashMap::from([(start, None)]);
+    let directions = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
+
+    while let Some(current) = frontier.pop_front() {
+        if current == target {
+            let mut path = Vec::new();
+            let mut cursor = Some(current);
+            while let Some(point) = cursor {
+                path.push(point);
+                cursor = came_from[&point];
+            }
+            path.reverse();
+            return Some(path);
+        }
+
+        for direction in directions {
+            let next = current + direction;
+            if is_road(next) && !came_from.contains_key(&next) {
+                frontier.push_back(next);
+                came_from.insert(next, Some(current));
+            }
+        }
+    }
+
+    None
+}
+
+fn render_buildings(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+) {
+    let top_mesh = meshes.add(face_mesh(&[
+        [0.0, 34.0, 0.0],
+        [42.0, 15.0, 0.0],
+        [0.0, -4.0, 0.0],
+        [-42.0, 15.0, 0.0],
+    ]));
+    let left_mesh = meshes.add(face_mesh(&[
+        [-42.0, 15.0, 0.0],
+        [0.0, -4.0, 0.0],
+        [0.0, -35.0, 0.0],
+        [-42.0, -16.0, 0.0],
+    ]));
+    let right_mesh = meshes.add(face_mesh(&[
+        [0.0, -4.0, 0.0],
+        [42.0, 15.0, 0.0],
+        [42.0, -16.0, 0.0],
+        [0.0, -35.0, 0.0],
+    ]));
+    let shop_door_mesh = meshes.add(face_mesh(&[
+        [-7.0, 10.0, 0.0],
+        [7.0, 10.0, 0.0],
+        [7.0, -10.0, 0.0],
+        [-7.0, -10.0, 0.0],
+    ]));
+    let person_door_mesh = meshes.add(face_mesh(&[
+        [-4.0, 7.0, 0.0],
+        [4.0, 7.0, 0.0],
+        [4.0, -7.0, 0.0],
+        [-4.0, -7.0, 0.0],
+    ]));
+    let top_material = materials.add(ColorMaterial::from(Color::srgb(0.48, 0.50, 0.51)));
+    let left_material = materials.add(ColorMaterial::from(Color::srgb(0.34, 0.36, 0.37)));
+    let right_material = materials.add(ColorMaterial::from(Color::srgb(0.27, 0.29, 0.30)));
+    let shop_material = materials.add(ColorMaterial::from(Color::srgb(0.93, 0.66, 0.18)));
+    let person_material = materials.add(ColorMaterial::from(Color::srgb(0.08, 0.10, 0.11)));
+
+    for spec in building_specs() {
+        let building = commands
+            .spawn((
+                Transform::from_translation(grid_to_world(spec.grid).extend(1.0)),
+                Building,
+            ))
+            .id();
+        let top = commands
+            .spawn((
+                Mesh2d(top_mesh.clone()),
+                MeshMaterial2d(top_material.clone()),
+                Transform::from_translation(Vec3::new(0.0, 0.0, 0.3)),
+            ))
+            .id();
+        let left = commands
+            .spawn((
+                Mesh2d(left_mesh.clone()),
+                MeshMaterial2d(left_material.clone()),
+                Transform::from_translation(Vec3::new(0.0, 0.0, 0.2)),
+            ))
+            .id();
+        let right = commands
+            .spawn((
+                Mesh2d(right_mesh.clone()),
+                MeshMaterial2d(right_material.clone()),
+                Transform::from_translation(Vec3::new(0.0, 0.0, 0.1)),
+            ))
+            .id();
+        let shop_door = commands
+            .spawn((
+                Mesh2d(shop_door_mesh.clone()),
+                MeshMaterial2d(shop_material.clone()),
+                Transform::from_translation(Vec3::new(-16.0, -18.0, 0.4)),
+            ))
+            .id();
+        let person_door = commands
+            .spawn((
+                Mesh2d(person_door_mesh.clone()),
+                MeshMaterial2d(person_material.clone()),
+                Transform::from_translation(Vec3::new(10.0, -21.0, 0.5)),
+            ))
+            .id();
+        commands
+            .entity(building)
+            .add_children(&[top, left, right, shop_door, person_door]);
     }
 }
 
@@ -83,6 +253,16 @@ fn isometric_tile_mesh() -> Mesh {
             [-half_width, 0.0, 0.0],
         ],
     );
+    mesh.insert_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]));
+    mesh
+}
+
+fn face_mesh(vertices: &[[f32; 3]; 4]) -> Mesh {
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.to_vec());
     mesh.insert_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]));
     mesh
 }
