@@ -1,5 +1,6 @@
 mod debug;
 mod truck;
+mod ui;
 mod world;
 
 use bevy::prelude::*;
@@ -16,6 +17,7 @@ fn main() {
             ..default()
         }))
         .insert_resource(world::RoadNetwork::default())
+        .insert_resource(ui::Focus::default())
         .insert_resource(ClearColor(Color::srgb(0.12, 0.10, 0.07)))
         .add_systems(Startup, render)
         .add_systems(Update, update)
@@ -23,15 +25,27 @@ fn main() {
 }
 
 /// High-level gameplay update. Domain modules own the details of each update.
+#[allow(clippy::too_many_arguments)]
 fn update(
     time: Res<Time>,
     buttons: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
+    truck_positions: Query<(Entity, &GlobalTransform), With<truck::Truck>>,
     mut trucks: Query<(&mut Transform, &mut truck::Truck)>,
     mut debug_text: Query<&mut Text, With<debug::DebugText>>,
+    mut focus: ResMut<ui::Focus>,
+    gizmos: Gizmos,
 ) {
-    truck::update_clicks(buttons, windows, cameras, &mut trucks);
+    ui::update(
+        &buttons,
+        windows,
+        cameras,
+        truck_positions,
+        &mut focus,
+        gizmos,
+    );
+    truck::update_clicks(buttons, windows, cameras, &focus, &mut trucks);
     debug::update_cursor(windows, cameras, &mut debug_text);
     truck::update(time, &mut trucks);
 }
@@ -52,4 +66,5 @@ fn render(
     );
     truck::render(&mut commands, &mut meshes, &mut materials);
     debug::render(&mut commands);
+    ui::render(&mut commands);
 }

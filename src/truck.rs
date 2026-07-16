@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::window::PrimaryWindow;
 
+use crate::ui::Focus;
 use crate::world;
 
 const TRUCK_WIDTH: f32 = 30.0;
@@ -95,9 +96,10 @@ pub fn update_clicks(
     buttons: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
+    focus: &Focus,
     trucks: &mut Query<(&mut Transform, &mut Truck)>,
 ) {
-    if !buttons.just_pressed(MouseButton::Left) {
+    if !buttons.just_pressed(MouseButton::Left) || focus.click_consumed {
         return;
     }
     let Ok(window) = windows.single() else { return };
@@ -117,6 +119,9 @@ pub fn update_clicks(
     let Some(target) = target else { return };
 
     for (transform, mut truck) in trucks.iter_mut() {
+        if focus.selected.is_none() {
+            continue;
+        }
         let start = world::world_to_grid(transform.translation.truncate());
         if let Some(path) = world::road_path(start, target) {
             truck.route = path
