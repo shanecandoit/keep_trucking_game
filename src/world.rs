@@ -8,6 +8,19 @@ pub const BOARD_HEIGHT: i32 = 9;
 pub const TILE_WIDTH: f32 = 86.0;
 pub const TILE_HEIGHT: f32 = 43.0;
 
+#[allow(dead_code)] // Concrete is reserved for the progression/unlock system.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Resource)]
+pub enum RoadTier {
+    #[default]
+    Gravel,
+    Concrete,
+}
+
+#[derive(Resource, Default)]
+pub struct RoadNetwork {
+    pub tier: RoadTier,
+}
+
 #[derive(Component, Clone, Copy)]
 pub struct Building;
 
@@ -40,31 +53,93 @@ pub fn render(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
+    road_tier: RoadTier,
 ) {
     let diamond = meshes.add(isometric_tile_mesh());
-    let dark = materials.add(ColorMaterial::from(Color::srgb(0.17, 0.28, 0.32)));
-    let light = materials.add(ColorMaterial::from(Color::srgb(0.20, 0.33, 0.36)));
+    let sand = materials.add(ColorMaterial::from(Color::srgb(0.69, 0.60, 0.43)));
+    let scrub = materials.add(ColorMaterial::from(Color::srgb(0.61, 0.57, 0.40)));
+    let gravel = materials.add(ColorMaterial::from(road_tier.base_color()));
+    let pebble = road_tier.pebble_color();
 
     for y in 0..BOARD_HEIGHT {
         for x in 0..BOARD_WIDTH {
             let grid = IVec2::new(x, y);
             let material = if is_road(grid) {
-                light.clone()
+                gravel.clone()
             } else if (x + y) % 2 == 0 {
-                dark.clone()
+                sand.clone()
             } else {
-                light.clone()
+                scrub.clone()
             };
 
-            commands.spawn((
-                Mesh2d(diamond.clone()),
-                MeshMaterial2d(material),
-                Transform::from_translation(grid_to_world(grid).extend(0.0)),
-            ));
+            let tile = commands
+                .spawn((
+                    Mesh2d(diamond.clone()),
+                    MeshMaterial2d(material),
+                    Transform::from_translation(grid_to_world(grid).extend(0.0)),
+                ))
+                .id();
+
+            if is_road(grid) && road_tier == RoadTier::Gravel {
+                render_gravel_pebbles(commands, tile, grid, pebble);
+            }
         }
     }
 
     render_buildings(commands, meshes, materials);
+}
+
+impl RoadTier {
+    fn base_color(self) -> Color {
+        match self {
+            Self::Gravel => Color::srgb(0.47, 0.40, 0.29),
+            Self::Concrete => Color::srgb(0.48, 0.49, 0.46),
+        }
+    }
+
+    fn pebble_color(self) -> Color {
+        match self {
+            Self::Gravel => Color::srgb(0.30, 0.25, 0.18),
+            Self::Concrete => Color::srgb(0.38, 0.39, 0.37),
+        }
+    }
+}
+
+impl RoadNetwork {
+    #[allow(dead_code)] // Called when the tier-2 infrastructure unlock is added.
+    pub fn unlock_concrete(&mut self) {
+        self.tier = RoadTier::Concrete;
+    }
+}
+
+fn render_gravel_pebbles(commands: &mut Commands, tile: Entity, grid: IVec2, color: Color) {
+    let offsets = match (grid.x + grid.y) % 3 {
+        0 => [
+            Vec2::new(-17.0, 3.0),
+            Vec2::new(8.0, -4.0),
+            Vec2::new(21.0, 5.0),
+        ],
+        1 => [
+            Vec2::new(-9.0, -5.0),
+            Vec2::new(13.0, 4.0),
+            Vec2::new(1.0, 7.0),
+        ],
+        _ => [
+            Vec2::new(-22.0, -2.0),
+            Vec2::new(-2.0, 4.0),
+            Vec2::new(16.0, -5.0),
+        ],
+    };
+
+    for (index, offset) in offsets.into_iter().enumerate() {
+        let pebble = commands
+            .spawn((
+                Sprite::from_color(color, Vec2::splat(if index == 1 { 4.0 } else { 3.0 })),
+                Transform::from_translation(offset.extend(0.1)),
+            ))
+            .id();
+        commands.entity(tile).add_child(pebble);
+    }
 }
 
 pub fn is_road(grid: IVec2) -> bool {
@@ -282,5 +357,15 @@ mod tests {
         let grid = IVec2::new(3, 7);
         let projected = grid_to_world(grid) + Vec2::new(3.0, -2.0);
         assert_eq!(world_to_grid(projected), grid);
+    }
+
+    #[test]
+    fn concrete_is_locked_until_the_road_network_unlocks_it() {
+        let mut roads = RoadNetwork::default();
+        assert_eq!(roads.tier, RoadTier::Gravel);
+
+        roads.unlock_concrete();
+
+        assert_eq!(roads.tier, RoadTier::Concrete);
     }
 }

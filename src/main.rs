@@ -15,6 +15,8 @@ fn main() {
             }),
             ..default()
         }))
+        .insert_resource(world::RoadNetwork::default())
+        .insert_resource(ClearColor(Color::srgb(0.12, 0.10, 0.07)))
         .add_systems(Startup, render)
         .add_systems(Update, update)
         .run();
@@ -39,9 +41,15 @@ fn render(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    road_network: Res<world::RoadNetwork>,
 ) {
     commands.spawn(Camera2d);
-    world::render(&mut commands, &mut meshes, &mut materials);
+    world::render(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        road_network.tier,
+    );
     truck::render(&mut commands, &mut meshes, &mut materials);
     debug::render(&mut commands);
 }
