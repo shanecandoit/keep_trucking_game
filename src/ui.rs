@@ -73,13 +73,17 @@ pub fn draw_bg_ui(
 
 pub fn draw_fg_ui(_commands: &mut Commands) {}
 
+#[allow(clippy::type_complexity)]
 pub fn update(
     buttons: &ButtonInput<MouseButton>,
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
     trucks: Query<(Entity, &GlobalTransform), With<Truck>>,
     focus: &mut Focus,
-    visuals: &mut Query<(&mut Transform, &mut Visibility, &FocusVisual), Without<Truck>>,
+    visuals: &mut Query<
+        (&mut Transform, &mut Visibility, &FocusVisual),
+        (Without<Truck>, Without<Camera>),
+    >,
     map: &world::TownMap,
 ) {
     focus.click_consumed = false;
@@ -118,10 +122,14 @@ pub fn update(
     update_visuals(focus, &trucks, visuals, map);
 }
 
+#[allow(clippy::type_complexity)]
 fn update_visuals(
     focus: &Focus,
     trucks: &Query<(Entity, &GlobalTransform), With<Truck>>,
-    visuals: &mut Query<(&mut Transform, &mut Visibility, &FocusVisual), Without<Truck>>,
+    visuals: &mut Query<
+        (&mut Transform, &mut Visibility, &FocusVisual),
+        (Without<Truck>, Without<Camera>),
+    >,
     map: &world::TownMap,
 ) {
     let selected_grid = focus.selected.and_then(|selected| {
