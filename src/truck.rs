@@ -115,7 +115,7 @@ pub fn update_clicks(
         return;
     };
     let clicked = world::world_to_grid(map, world_cursor);
-    let target = world::building_at(clicked)
+    let target = world::building_at(map, clicked)
         .map(|building| building.entrance)
         .or_else(|| world::is_road(map, clicked).then_some(clicked));
     let Some(target) = target else { return };

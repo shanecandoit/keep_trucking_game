@@ -5,6 +5,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 pub const TILE_WIDTH: f32 = 54.0;
 pub const TILE_HEIGHT: f32 = 27.0;
+const BUILDING_HALF_WIDTH: f32 = 42.0;
+const BUILDING_HALF_HEIGHT: f32 = 35.0;
+const BUILDING_GAP: f32 = 2.0;
 
 const SMALL_TOWN_ASCII: &str = include_str!("../assets/maps/small_town.txt");
 
@@ -13,6 +16,7 @@ pub struct TownMap {
     width: i32,
     height: i32,
     roads: HashSet<IVec2>,
+    buildings: Vec<BuildingSpec>,
 }
 
 impl TownMap {
@@ -31,6 +35,7 @@ impl TownMap {
         }
 
         let mut roads = HashSet::new();
+        let mut building_tiles = Vec::new();
         for (y, row) in rows.iter().enumerate() {
             if row.chars().count() != width {
                 return Err(format!("map row {} has a different width", y + 1));
@@ -41,11 +46,45 @@ impl TownMap {
                     '#' => {
                         roads.insert(IVec2::new(x as i32, y as i32));
                     }
+                    'R' | 'B' => {
+                        let kind = if tile == 'R' {
+                            BuildingKind::Residence
+                        } else {
+                            BuildingKind::Business
+                        };
+                        building_tiles.push((IVec2::new(x as i32, y as i32), kind));
+                    }
                     other => {
                         return Err(format!(
-                            "unsupported map tile '{other}' at ({x}, {y}); use '.' or '#'"
+                            "unsupported map tile '{other}' at ({x}, {y}); use '.', '#', 'R', or 'B'"
                         ));
                     }
+                }
+            }
+        }
+
+        let entrance_directions = [IVec2::NEG_Y, IVec2::Y, IVec2::NEG_X, IVec2::X];
+        let mut buildings = Vec::with_capacity(building_tiles.len());
+        for (grid, kind) in building_tiles {
+            let entrance = entrance_directions
+                .into_iter()
+                .map(|direction| grid + direction)
+                .find(|neighbor| roads.contains(neighbor))
+                .ok_or_else(|| format!("building at {grid} has no adjacent road entrance"))?;
+            buildings.push(BuildingSpec {
+                grid,
+                entrance,
+                kind,
+            });
+        }
+
+        for (index, first) in buildings.iter().enumerate() {
+            for second in buildings.iter().skip(index + 1) {
+                if building_bounds_touch(first, second) {
+                    return Err(format!(
+                        "buildings at {} and {} are too close; leave a clear gap",
+                        first.grid, second.grid
+                    ));
                 }
             }
         }
@@ -54,12 +93,19 @@ impl TownMap {
             width: width as i32,
             height: rows.len() as i32,
             roads,
+            buildings,
         })
     }
 
     pub fn center(&self) -> IVec2 {
         IVec2::new(self.width / 2, self.height / 2)
     }
+}
+
+fn building_bounds_touch(first: &BuildingSpec, second: &BuildingSpec) -> bool {
+    let delta = top_down_to_iso((first.grid - second.grid).as_vec2());
+    delta.x.abs() < BUILDING_HALF_WIDTH * 2.0 + BUILDING_GAP
+        && delta.y.abs() < BUILDING_HALF_HEIGHT * 2.0 + BUILDING_GAP
 }
 
 #[allow(dead_code)] // Concrete is reserved for the progression/unlock system.
@@ -78,30 +124,18 @@ pub struct RoadNetwork {
 #[derive(Component, Clone, Copy)]
 pub struct Building;
 
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BuildingKind {
+    Residence,
+    Business,
+}
+
 #[derive(Clone, Copy)]
 pub struct BuildingSpec {
     pub grid: IVec2,
     pub entrance: IVec2,
+    pub kind: BuildingKind,
 }
-
-const BUILDINGS: [BuildingSpec; 4] = [
-    BuildingSpec {
-        grid: IVec2::new(3, 3),
-        entrance: IVec2::new(4, 3),
-    },
-    BuildingSpec {
-        grid: IVec2::new(9, 1),
-        entrance: IVec2::new(10, 1),
-    },
-    BuildingSpec {
-        grid: IVec2::new(14, 5),
-        entrance: IVec2::new(14, 4),
-    },
-    BuildingSpec {
-        grid: IVec2::new(17, 9),
-        entrance: IVec2::new(17, 10),
-    },
-];
 
 pub fn draw_bg(
     commands: &mut Commands,
@@ -199,12 +233,12 @@ pub fn is_road(map: &TownMap, grid: IVec2) -> bool {
     map.roads.contains(&grid)
 }
 
-pub fn building_specs() -> &'static [BuildingSpec] {
-    &BUILDINGS
+pub fn building_specs(map: &TownMap) -> &[BuildingSpec] {
+    &map.buildings
 }
 
-pub fn building_at(grid: IVec2) -> Option<BuildingSpec> {
-    BUILDINGS
+pub fn building_at(map: &TownMap, grid: IVec2) -> Option<BuildingSpec> {
+    map.buildings
         .iter()
         .copied()
         .find(|building| building.grid == grid)
@@ -285,11 +319,12 @@ pub fn draw_buildings(
     let shop_material = materials.add(ColorMaterial::from(Color::srgb(0.93, 0.66, 0.18)));
     let person_material = materials.add(ColorMaterial::from(Color::srgb(0.08, 0.10, 0.11)));
 
-    for spec in building_specs() {
+    for spec in building_specs(map) {
         let building = commands
             .spawn((
                 Transform::from_translation(grid_to_world(map, spec.grid).extend(2.0)),
                 Building,
+                spec.kind,
             ))
             .id();
         let top = commands
@@ -420,6 +455,25 @@ mod tests {
         assert!(is_road(&map, IVec2::new(30, 7)));
         assert!(is_road(&map, IVec2::new(16, 4)));
         assert!(!is_road(&map, IVec2::new(0, 0)));
+        assert_eq!(
+            map.buildings
+                .iter()
+                .filter(|building| building.kind == BuildingKind::Residence)
+                .count(),
+            4
+        );
+        assert_eq!(
+            map.buildings
+                .iter()
+                .filter(|building| building.kind == BuildingKind::Business)
+                .count(),
+            7
+        );
+        assert!(
+            map.buildings
+                .iter()
+                .all(|building| is_road(&map, building.entrance))
+        );
     }
 
     #[test]
