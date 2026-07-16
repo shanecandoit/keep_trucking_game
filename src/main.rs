@@ -11,7 +11,7 @@ const PLAYER_SIZE: f32 = 30.0;
 const PLAYER_SPEED: f32 = 260.0;
 
 #[derive(Component)]
-struct Player {
+struct Truck {
     destination: Option<Vec3>,
 }
 
@@ -40,12 +40,12 @@ fn update(
     buttons: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
-    mut players: Query<(&mut Transform, &mut Player)>,
+    mut trucks: Query<(&mut Transform, &mut Truck)>,
     mut debug_text: Query<&mut Text, With<DebugText>>,
 ) {
-    update_clicks(buttons, windows, cameras, &mut players);
+    update_clicks(buttons, windows, cameras, &mut trucks);
     update_debug_cursor(windows, cameras, &mut debug_text);
-    update_player(time, &mut players);
+    update_truck(time, &mut trucks);
 }
 
 /// Bevy performs the actual frame rendering. This setup function constructs
@@ -59,7 +59,7 @@ fn render(
 
     let origin = board_origin();
     render_board(&mut commands, origin, &mut meshes, &mut materials);
-    render_player(&mut commands, origin);
+    render_truck(&mut commands, origin, &mut meshes, &mut materials);
     render_ui(&mut commands);
 }
 
@@ -112,16 +112,78 @@ fn isometric_tile_mesh() -> Mesh {
     mesh
 }
 
-fn render_player(commands: &mut Commands, origin: Vec2) {
+fn render_truck(
+    commands: &mut Commands,
+    origin: Vec2,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+) {
     let start = IVec2::new(BOARD_WIDTH / 2, BOARD_HEIGHT / 2);
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.9, 0.08, 0.08), Vec2::splat(PLAYER_SIZE)),
-        Transform {
-            translation: grid_to_world(start, origin).extend(2.0),
-            ..default()
-        },
-        Player { destination: None },
-    ));
+    let truck = commands
+        .spawn((
+            Transform::from_translation(grid_to_world(start, origin).extend(2.0)),
+            Truck { destination: None },
+        ))
+        .id();
+
+    let top = meshes.add(face_mesh(&[
+        [0.0, 18.0, 0.0],
+        [PLAYER_SIZE, 5.0, 0.0],
+        [0.0, -8.0, 0.0],
+        [-PLAYER_SIZE, 5.0, 0.0],
+    ]));
+    let left = meshes.add(face_mesh(&[
+        [-PLAYER_SIZE, 5.0, 0.0],
+        [0.0, -8.0, 0.0],
+        [0.0, -25.0, 0.0],
+        [-PLAYER_SIZE, -12.0, 0.0],
+    ]));
+    let right = meshes.add(face_mesh(&[
+        [0.0, -8.0, 0.0],
+        [PLAYER_SIZE, 5.0, 0.0],
+        [PLAYER_SIZE, -12.0, 0.0],
+        [0.0, -25.0, 0.0],
+    ]));
+
+    let top_material = materials.add(ColorMaterial::from(Color::srgb(1.0, 0.12, 0.12)));
+    let left_material = materials.add(ColorMaterial::from(Color::srgb(0.78, 0.04, 0.04)));
+    let right_material = materials.add(ColorMaterial::from(Color::srgb(0.55, 0.02, 0.02)));
+
+    let top_entity = commands
+        .spawn((
+            Mesh2d(top),
+            MeshMaterial2d(top_material),
+            Transform::from_translation(Vec3::new(0.0, 0.0, 0.3)),
+        ))
+        .id();
+    let left_entity = commands
+        .spawn((
+            Mesh2d(left),
+            MeshMaterial2d(left_material),
+            Transform::from_translation(Vec3::new(0.0, 0.0, 0.2)),
+        ))
+        .id();
+    let right_entity = commands
+        .spawn((
+            Mesh2d(right),
+            MeshMaterial2d(right_material),
+            Transform::from_translation(Vec3::new(0.0, 0.0, 0.1)),
+        ))
+        .id();
+
+    commands
+        .entity(truck)
+        .add_children(&[top_entity, left_entity, right_entity]);
+}
+
+fn face_mesh(vertices: &[[f32; 3]; 4]) -> Mesh {
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.to_vec());
+    mesh.insert_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]));
+    mesh
 }
 
 fn render_ui(commands: &mut Commands) {
@@ -168,7 +230,7 @@ fn update_clicks(
     buttons: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
-    players: &mut Query<(&mut Transform, &mut Player)>,
+    trucks: &mut Query<(&mut Transform, &mut Truck)>,
 ) {
     if !buttons.just_pressed(MouseButton::Left) {
         return;
@@ -189,15 +251,15 @@ fn update_clicks(
     let grid = world_to_grid(world_cursor, origin);
     if in_board(grid) {
         let destination = grid_to_world(grid, origin).extend(2.0);
-        for (_, mut player) in players.iter_mut() {
-            player.destination = Some(destination);
+        for (_, mut truck) in trucks.iter_mut() {
+            truck.destination = Some(destination);
         }
     }
 }
 
-fn update_player(time: Res<Time>, players: &mut Query<(&mut Transform, &mut Player)>) {
-    for (mut transform, mut player) in players.iter_mut() {
-        let Some(destination) = player.destination else {
+fn update_truck(time: Res<Time>, trucks: &mut Query<(&mut Transform, &mut Truck)>) {
+    for (mut transform, mut truck) in trucks.iter_mut() {
+        let Some(destination) = truck.destination else {
             continue;
         };
         let current = transform.translation;
@@ -206,7 +268,7 @@ fn update_player(time: Res<Time>, players: &mut Query<(&mut Transform, &mut Play
 
         if distance <= step {
             transform.translation = destination;
-            player.destination = None;
+            truck.destination = None;
         } else {
             transform.translation = current.move_towards(destination, step);
         }

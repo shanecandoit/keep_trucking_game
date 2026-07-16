@@ -81,7 +81,7 @@ Virtuous loop: pristine fleet → priority contracts → more money → better t
 
 Semi-realistic trucks and environments overlaid with clean, OpenTTD-style route lines and diegetic HUD elements (dashboard gauges, bumper-sticker wear indicators).
 
-- **Palette**: desaturated blue-collar base (asphalt gray, rust orange, safety yellow) + one saturated "systems color" (electric cyan or lime) reserved *only* for UI overlays - routes, wear meters, contract pins.
+- **Palette**: desaturated blue-collar base (asphalt gray, rust orange, safety yellow) + one saturated "systems color" (electric cyan) reserved *only* for UI overlays - routes, wear meters, contract pins.
 - **Trucks**: realistic silhouettes; wear is shown environmentally (dents, mud, exhaust color) rather than only through a health bar.
 - **Roads**: player-built highways look physically distinct from stock roads (fresh vs. cracked asphalt) - makes the core pillar legible without opening a menu.
 - **Drivers/Mechanics**: portrait-style icons, not full 3D characters - cheap, enough personality to carry the named-asset pillar.
