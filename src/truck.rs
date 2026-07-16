@@ -14,7 +14,7 @@ pub struct Truck {
     pub route: Vec<Vec3>,
 }
 
-pub fn render(
+pub fn draw_trucks(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,

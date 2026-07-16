@@ -61,13 +61,46 @@ fn render(
     road_network: Res<world::RoadNetwork>,
 ) {
     commands.spawn(Camera2d);
-    world::render(
+    draw_bg(
         &mut commands,
         &mut meshes,
         &mut materials,
         road_network.tier,
     );
-    truck::render(&mut commands, &mut meshes, &mut materials);
-    debug::render(&mut commands);
-    ui::render(&mut commands, &mut meshes, &mut materials);
+    draw_bg_ui(&mut commands, &mut meshes, &mut materials);
+    draw_fg(&mut commands, &mut meshes, &mut materials);
+    draw_fg_ui(&mut commands);
+}
+
+fn draw_bg(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    road_tier: world::RoadTier,
+) {
+    world::draw_bg(commands, meshes, materials, road_tier);
+}
+
+fn draw_bg_ui(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+) {
+    // Focus box and mouse pointer live between the terrain and actors.
+    ui::draw_bg_ui(commands, meshes, materials);
+    debug::render(commands);
+}
+
+fn draw_fg(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+) {
+    truck::draw_trucks(commands, meshes, materials);
+    world::draw_buildings(commands, meshes, materials);
+}
+
+fn draw_fg_ui(commands: &mut Commands) {
+    // Reserved for actor/status UI that should render above trucks/buildings.
+    ui::draw_fg_ui(commands);
 }

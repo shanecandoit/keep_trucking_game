@@ -6,6 +6,10 @@ use bevy::window::PrimaryWindow;
 use crate::{truck::Truck, world};
 
 const CYAN: Color = Color::srgba(0.15, 0.95, 0.95, 0.65);
+const LIGHT_BEAM: Color = Color::srgba(0.15, 0.95, 0.95, 0.18);
+const LIGHT_BASE: Color = Color::srgba(0.15, 0.95, 0.95, 0.38);
+const LIGHT_HEIGHT: f32 = 110.0;
+const LIGHT_RADIUS: f32 = 9.0;
 const FOCUS_Z: f32 = 1.0;
 
 #[derive(Resource, Default)]
@@ -26,13 +30,17 @@ pub enum FocusVisualKind {
     HoveredTile,
 }
 
-pub fn render(
+pub fn draw_bg_ui(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
 ) {
     let material = materials.add(ColorMaterial::from(CYAN));
     let border_mesh = meshes.add(tile_outline_mesh());
+    let beam_mesh = meshes.add(light_beam_mesh());
+    let base_mesh = meshes.add(light_base_mesh());
+    let beam_material = materials.add(ColorMaterial::from(LIGHT_BEAM));
+    let base_material = materials.add(ColorMaterial::from(LIGHT_BASE));
 
     commands.spawn((
         Mesh2d(border_mesh),
@@ -44,14 +52,26 @@ pub fn render(
         },
     ));
     commands.spawn((
-        Sprite::from_color(CYAN, Vec2::splat(7.0)),
+        Mesh2d(beam_mesh),
+        MeshMaterial2d(beam_material),
         Transform::from_translation(Vec3::new(0.0, 0.0, FOCUS_Z + 0.1)),
         Visibility::Hidden,
         FocusVisual {
             kind: FocusVisualKind::HoveredTile,
         },
     ));
+    commands.spawn((
+        Mesh2d(base_mesh),
+        MeshMaterial2d(base_material),
+        Transform::from_translation(Vec3::new(0.0, 0.0, FOCUS_Z + 0.2)),
+        Visibility::Hidden,
+        FocusVisual {
+            kind: FocusVisualKind::HoveredTile,
+        },
+    ));
 }
+
+pub fn draw_fg_ui(_commands: &mut Commands) {}
 
 pub fn update(
     buttons: &ButtonInput<MouseButton>,
@@ -145,5 +165,38 @@ fn tile_outline_mesh() -> Mesh {
         ],
     );
     mesh.insert_indices(Indices::U32(vec![0, 1, 2, 3, 4]));
+    mesh
+}
+
+fn light_beam_mesh() -> Mesh {
+    // A constant-width vertical rectangle is the 2D projection of the light
+    // cylinder. It extends above the building silhouette while remaining in
+    // the background-UI z layer, so buildings can occlude its lower section.
+    quad_mesh([
+        [-LIGHT_RADIUS, 0.0, 0.0],
+        [LIGHT_RADIUS, 0.0, 0.0],
+        [LIGHT_RADIUS, LIGHT_HEIGHT, 0.0],
+        [-LIGHT_RADIUS, LIGHT_HEIGHT, 0.0],
+    ])
+}
+
+fn light_base_mesh() -> Mesh {
+    let half_width = world::TILE_WIDTH * 0.22;
+    let half_height = world::TILE_HEIGHT * 0.22;
+    quad_mesh([
+        [0.0, half_height, 0.0],
+        [half_width, 0.0, 0.0],
+        [0.0, -half_height, 0.0],
+        [-half_width, 0.0, 0.0],
+    ])
+}
+
+fn quad_mesh(vertices: [[f32; 3]; 4]) -> Mesh {
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.to_vec());
+    mesh.insert_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]));
     mesh
 }

@@ -49,7 +49,7 @@ const BUILDINGS: [BuildingSpec; 4] = [
     },
 ];
 
-pub fn render(
+pub fn draw_bg(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
@@ -85,8 +85,6 @@ pub fn render(
             }
         }
     }
-
-    render_buildings(commands, meshes, materials);
 }
 
 impl RoadTier {
@@ -190,7 +188,7 @@ pub fn road_path(start: IVec2, target: IVec2) -> Option<Vec<IVec2>> {
     None
 }
 
-fn render_buildings(
+pub fn draw_buildings(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
