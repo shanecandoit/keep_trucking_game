@@ -17,6 +17,7 @@ fn main() {
             ..default()
         }))
         .insert_resource(world::RoadNetwork::default())
+        .insert_resource(world::TownMap::load_default())
         .insert_resource(ui::Focus::default())
         .insert_resource(ClearColor(Color::srgb(0.12, 0.10, 0.07)))
         .add_systems(Startup, render)
@@ -35,6 +36,7 @@ fn update(
     mut trucks: Query<(&mut Transform, &mut truck::Truck)>,
     mut debug_text: Query<&mut Text, With<debug::DebugText>>,
     mut focus: ResMut<ui::Focus>,
+    map: Res<world::TownMap>,
     mut focus_visuals: Query<
         (&mut Transform, &mut Visibility, &ui::FocusVisual),
         Without<truck::Truck>,
@@ -47,9 +49,10 @@ fn update(
         truck_positions,
         &mut focus,
         &mut focus_visuals,
+        &map,
     );
-    truck::update_clicks(buttons, windows, cameras, &focus, &mut trucks);
-    debug::update_cursor(windows, cameras, &mut debug_text);
+    truck::update_clicks(buttons, windows, cameras, &focus, &mut trucks, &map);
+    debug::update_cursor(windows, cameras, &mut debug_text, &map);
     truck::update(time, &mut trucks);
 }
 
@@ -59,16 +62,18 @@ fn render(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     road_network: Res<world::RoadNetwork>,
+    map: Res<world::TownMap>,
 ) {
     commands.spawn(Camera2d);
     draw_bg(
         &mut commands,
         &mut meshes,
         &mut materials,
+        &map,
         road_network.tier,
     );
     draw_bg_ui(&mut commands, &mut meshes, &mut materials);
-    draw_fg(&mut commands, &mut meshes, &mut materials);
+    draw_fg(&mut commands, &mut meshes, &mut materials, &map);
     draw_fg_ui(&mut commands);
 }
 
@@ -76,9 +81,10 @@ fn draw_bg(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
+    map: &world::TownMap,
     road_tier: world::RoadTier,
 ) {
-    world::draw_bg(commands, meshes, materials, road_tier);
+    world::draw_bg(commands, meshes, materials, map, road_tier);
 }
 
 fn draw_bg_ui(
@@ -95,9 +101,10 @@ fn draw_fg(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
+    map: &world::TownMap,
 ) {
-    truck::draw_trucks(commands, meshes, materials);
-    world::draw_buildings(commands, meshes, materials);
+    truck::draw_trucks(commands, meshes, materials, map);
+    world::draw_buildings(commands, meshes, materials, map);
 }
 
 fn draw_fg_ui(commands: &mut Commands) {

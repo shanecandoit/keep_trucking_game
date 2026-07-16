@@ -23,6 +23,7 @@ pub fn update_cursor(
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
     debug_text: &mut Query<&mut Text, With<DebugText>>,
+    map: &world::TownMap,
 ) {
     let Ok(window) = windows.single() else { return };
     let Ok((camera, camera_transform)) = cameras.single() else {
@@ -34,7 +35,7 @@ pub fn update_cursor(
     let Ok(iso_world) = camera.viewport_to_world_2d(camera_transform, screen) else {
         return;
     };
-    let top_down = world::iso_to_top_down(iso_world - world::board_origin());
+    let top_down = world::iso_to_top_down(iso_world - world::board_origin(map));
     let grid = IVec2::new(top_down.x.round() as i32, top_down.y.round() as i32);
 
     for mut text in debug_text.iter_mut() {

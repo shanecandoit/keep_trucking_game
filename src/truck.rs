@@ -18,11 +18,12 @@ pub fn draw_trucks(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
+    map: &world::TownMap,
 ) {
-    let start = IVec2::new(world::BOARD_WIDTH / 2, world::BOARD_HEIGHT / 2);
+    let start = map.center();
     let truck = commands
         .spawn((
-            Transform::from_translation(world::grid_to_world(start).extend(3.0)),
+            Transform::from_translation(world::grid_to_world(map, start).extend(3.0)),
             Truck { route: Vec::new() },
         ))
         .id();
@@ -98,6 +99,7 @@ pub fn update_clicks(
     cameras: Query<(&Camera, &GlobalTransform)>,
     focus: &Focus,
     trucks: &mut Query<(&mut Transform, &mut Truck)>,
+    map: &world::TownMap,
 ) {
     if !buttons.just_pressed(MouseButton::Left) || focus.click_consumed {
         return;
@@ -112,18 +114,18 @@ pub fn update_clicks(
     let Ok(world_cursor) = camera.viewport_to_world_2d(camera_transform, cursor) else {
         return;
     };
-    let clicked = world::world_to_grid(world_cursor);
+    let clicked = world::world_to_grid(map, world_cursor);
     let target = world::building_at(clicked)
         .map(|building| building.entrance)
-        .or_else(|| world::is_road(clicked).then_some(clicked));
+        .or_else(|| world::is_road(map, clicked).then_some(clicked));
     let Some(target) = target else { return };
 
     for (transform, mut truck) in trucks.iter_mut() {
         if focus.selected.is_none() {
             continue;
         }
-        let start = world::world_to_grid(transform.translation.truncate());
-        if let Some(path) = world::road_path(start, target) {
+        let start = world::world_to_grid(map, transform.translation.truncate());
+        if let Some(path) = world::road_path(map, start, target) {
             info!(
                 ?start,
                 ?target,
@@ -133,7 +135,7 @@ pub fn update_clicks(
             truck.route = path
                 .into_iter()
                 .skip(1)
-                .map(|grid| world::grid_to_world(grid).extend(2.0))
+                .map(|grid| world::grid_to_world(map, grid).extend(3.0))
                 .collect();
         } else {
             warn!(?start, ?target, "no road route found for truck");

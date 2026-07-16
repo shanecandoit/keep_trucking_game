@@ -80,29 +80,30 @@ pub fn update(
     trucks: Query<(Entity, &GlobalTransform), With<Truck>>,
     focus: &mut Focus,
     visuals: &mut Query<(&mut Transform, &mut Visibility, &FocusVisual), Without<Truck>>,
+    map: &world::TownMap,
 ) {
     focus.click_consumed = false;
 
     let Ok(window) = windows.single() else {
-        update_visuals(focus, &trucks, visuals);
+        update_visuals(focus, &trucks, visuals, map);
         return;
     };
     let Some(cursor) = window.cursor_position() else {
         focus.hovered = None;
-        update_visuals(focus, &trucks, visuals);
+        update_visuals(focus, &trucks, visuals, map);
         return;
     };
     let Ok((camera, camera_transform)) = cameras.single() else {
-        update_visuals(focus, &trucks, visuals);
+        update_visuals(focus, &trucks, visuals, map);
         return;
     };
     let Ok(world_cursor) = camera.viewport_to_world_2d(camera_transform, cursor) else {
-        update_visuals(focus, &trucks, visuals);
+        update_visuals(focus, &trucks, visuals, map);
         return;
     };
 
-    let hovered = world::world_to_grid(world_cursor);
-    focus.hovered = world::in_board(hovered).then_some(hovered);
+    let hovered = world::world_to_grid(map, world_cursor);
+    focus.hovered = world::in_board(map, hovered).then_some(hovered);
 
     if buttons.just_pressed(MouseButton::Left)
         && let Some((entity, _)) = trucks
@@ -114,19 +115,20 @@ pub fn update(
         info!(?entity, "selected truck");
     }
 
-    update_visuals(focus, &trucks, visuals);
+    update_visuals(focus, &trucks, visuals, map);
 }
 
 fn update_visuals(
     focus: &Focus,
     trucks: &Query<(Entity, &GlobalTransform), With<Truck>>,
     visuals: &mut Query<(&mut Transform, &mut Visibility, &FocusVisual), Without<Truck>>,
+    map: &world::TownMap,
 ) {
     let selected_grid = focus.selected.and_then(|selected| {
         trucks
             .iter()
             .find(|(entity, _)| *entity == selected)
-            .map(|(_, transform)| world::world_to_grid(transform.translation().truncate()))
+            .map(|(_, transform)| world::world_to_grid(map, transform.translation().truncate()))
     });
 
     for (mut transform, mut visibility, visual) in visuals.iter_mut() {
@@ -142,7 +144,7 @@ fn update_visuals(
             Visibility::Hidden
         };
         if visible {
-            transform.translation = world::grid_to_world(grid).extend(transform.translation.z);
+            transform.translation = world::grid_to_world(map, grid).extend(transform.translation.z);
         }
     }
 }

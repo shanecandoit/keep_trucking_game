@@ -1,12 +1,66 @@
 use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
-pub const BOARD_WIDTH: i32 = 9;
-pub const BOARD_HEIGHT: i32 = 9;
-pub const TILE_WIDTH: f32 = 86.0;
-pub const TILE_HEIGHT: f32 = 43.0;
+pub const TILE_WIDTH: f32 = 54.0;
+pub const TILE_HEIGHT: f32 = 27.0;
+
+const SMALL_TOWN_ASCII: &str = include_str!("../assets/maps/small_town.txt");
+
+#[derive(Resource)]
+pub struct TownMap {
+    width: i32,
+    height: i32,
+    roads: HashSet<IVec2>,
+}
+
+impl TownMap {
+    pub fn load_default() -> Self {
+        Self::parse(SMALL_TOWN_ASCII).expect("assets/maps/small_town.txt must be a valid map")
+    }
+
+    fn parse(source: &str) -> Result<Self, String> {
+        let rows: Vec<&str> = source.lines().filter(|line| !line.is_empty()).collect();
+        let Some(first) = rows.first() else {
+            return Err("map is empty".into());
+        };
+        let width = first.chars().count();
+        if width == 0 {
+            return Err("map has an empty first row".into());
+        }
+
+        let mut roads = HashSet::new();
+        for (y, row) in rows.iter().enumerate() {
+            if row.chars().count() != width {
+                return Err(format!("map row {} has a different width", y + 1));
+            }
+            for (x, tile) in row.chars().enumerate() {
+                match tile {
+                    '.' => {}
+                    '#' => {
+                        roads.insert(IVec2::new(x as i32, y as i32));
+                    }
+                    other => {
+                        return Err(format!(
+                            "unsupported map tile '{other}' at ({x}, {y}); use '.' or '#'"
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(Self {
+            width: width as i32,
+            height: rows.len() as i32,
+            roads,
+        })
+    }
+
+    pub fn center(&self) -> IVec2 {
+        IVec2::new(self.width / 2, self.height / 2)
+    }
+}
 
 #[allow(dead_code)] // Concrete is reserved for the progression/unlock system.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Resource)]
@@ -32,20 +86,20 @@ pub struct BuildingSpec {
 
 const BUILDINGS: [BuildingSpec; 4] = [
     BuildingSpec {
-        grid: IVec2::new(1, 4),
-        entrance: IVec2::new(2, 4),
+        grid: IVec2::new(3, 3),
+        entrance: IVec2::new(4, 3),
     },
     BuildingSpec {
-        grid: IVec2::new(7, 4),
-        entrance: IVec2::new(6, 4),
+        grid: IVec2::new(9, 1),
+        entrance: IVec2::new(10, 1),
     },
     BuildingSpec {
-        grid: IVec2::new(4, 1),
-        entrance: IVec2::new(4, 2),
+        grid: IVec2::new(14, 5),
+        entrance: IVec2::new(14, 4),
     },
     BuildingSpec {
-        grid: IVec2::new(4, 7),
-        entrance: IVec2::new(4, 6),
+        grid: IVec2::new(17, 9),
+        entrance: IVec2::new(17, 10),
     },
 ];
 
@@ -53,6 +107,7 @@ pub fn draw_bg(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
+    map: &TownMap,
     road_tier: RoadTier,
 ) {
     let diamond = meshes.add(isometric_tile_mesh());
@@ -61,10 +116,10 @@ pub fn draw_bg(
     let gravel = materials.add(ColorMaterial::from(road_tier.base_color()));
     let pebble = road_tier.pebble_color();
 
-    for y in 0..BOARD_HEIGHT {
-        for x in 0..BOARD_WIDTH {
+    for y in 0..map.height {
+        for x in 0..map.width {
             let grid = IVec2::new(x, y);
-            let material = if is_road(grid) {
+            let material = if is_road(map, grid) {
                 gravel.clone()
             } else if (x + y) % 2 == 0 {
                 sand.clone()
@@ -76,11 +131,11 @@ pub fn draw_bg(
                 .spawn((
                     Mesh2d(diamond.clone()),
                     MeshMaterial2d(material),
-                    Transform::from_translation(grid_to_world(grid).extend(0.0)),
+                    Transform::from_translation(grid_to_world(map, grid).extend(0.0)),
                 ))
                 .id();
 
-            if is_road(grid) && road_tier == RoadTier::Gravel {
+            if is_road(map, grid) && road_tier == RoadTier::Gravel {
                 render_gravel_pebbles(commands, tile, grid, pebble);
             }
         }
@@ -140,8 +195,8 @@ fn render_gravel_pebbles(commands: &mut Commands, tile: Entity, grid: IVec2, col
     }
 }
 
-pub fn is_road(grid: IVec2) -> bool {
-    in_board(grid) && (grid.x == BOARD_WIDTH / 2 || grid.y == BOARD_HEIGHT / 2)
+pub fn is_road(map: &TownMap, grid: IVec2) -> bool {
+    map.roads.contains(&grid)
 }
 
 pub fn building_specs() -> &'static [BuildingSpec] {
@@ -155,8 +210,8 @@ pub fn building_at(grid: IVec2) -> Option<BuildingSpec> {
         .find(|building| building.grid == grid)
 }
 
-pub fn road_path(start: IVec2, target: IVec2) -> Option<Vec<IVec2>> {
-    if !is_road(start) || !is_road(target) {
+pub fn road_path(map: &TownMap, start: IVec2, target: IVec2) -> Option<Vec<IVec2>> {
+    if !is_road(map, start) || !is_road(map, target) {
         return None;
     }
 
@@ -178,7 +233,7 @@ pub fn road_path(start: IVec2, target: IVec2) -> Option<Vec<IVec2>> {
 
         for direction in directions {
             let next = current + direction;
-            if is_road(next) && !came_from.contains_key(&next) {
+            if is_road(map, next) && !came_from.contains_key(&next) {
                 frontier.push_back(next);
                 came_from.insert(next, Some(current));
             }
@@ -192,6 +247,7 @@ pub fn draw_buildings(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
+    map: &TownMap,
 ) {
     let top_mesh = meshes.add(face_mesh(&[
         [0.0, 34.0, 0.0],
@@ -232,7 +288,7 @@ pub fn draw_buildings(
     for spec in building_specs() {
         let building = commands
             .spawn((
-                Transform::from_translation(grid_to_world(spec.grid).extend(2.0)),
+                Transform::from_translation(grid_to_world(map, spec.grid).extend(2.0)),
                 Building,
             ))
             .id();
@@ -277,19 +333,16 @@ pub fn draw_buildings(
     }
 }
 
-pub fn board_origin() -> Vec2 {
-    Vec2::new(
-        0.0,
-        -((BOARD_WIDTH + BOARD_HEIGHT) as f32 * TILE_HEIGHT * 0.25),
-    )
+pub fn board_origin(map: &TownMap) -> Vec2 {
+    Vec2::new(0.0, -((map.width + map.height) as f32 * TILE_HEIGHT * 0.25))
 }
 
-pub fn grid_to_world(grid: IVec2) -> Vec2 {
-    top_down_to_iso(grid.as_vec2()) + board_origin()
+pub fn grid_to_world(map: &TownMap, grid: IVec2) -> Vec2 {
+    top_down_to_iso(grid.as_vec2()) + board_origin(map)
 }
 
-pub fn world_to_grid(world: Vec2) -> IVec2 {
-    let point = iso_to_top_down(world - board_origin());
+pub fn world_to_grid(map: &TownMap, world: Vec2) -> IVec2 {
+    let point = iso_to_top_down(world - board_origin(map));
     IVec2::new(point.x.round() as i32, point.y.round() as i32)
 }
 
@@ -306,8 +359,8 @@ pub fn iso_to_top_down(iso: Vec2) -> Vec2 {
     Vec2::new((x + y) * 0.5, (y - x) * 0.5)
 }
 
-pub fn in_board(grid: IVec2) -> bool {
-    grid.x >= 0 && grid.x < BOARD_WIDTH && grid.y >= 0 && grid.y < BOARD_HEIGHT
+pub fn in_board(map: &TownMap, grid: IVec2) -> bool {
+    grid.x >= 0 && grid.x < map.width && grid.y >= 0 && grid.y < map.height
 }
 
 fn isometric_tile_mesh() -> Mesh {
@@ -352,9 +405,31 @@ mod tests {
 
     #[test]
     fn grid_projection_rounds_to_the_nearest_tile() {
+        let map = TownMap::load_default();
         let grid = IVec2::new(3, 7);
-        let projected = grid_to_world(grid) + Vec2::new(3.0, -2.0);
-        assert_eq!(world_to_grid(projected), grid);
+        let projected = grid_to_world(&map, grid) + Vec2::new(3.0, -2.0);
+        assert_eq!(world_to_grid(&map, projected), grid);
+    }
+
+    #[test]
+    fn ascii_map_loads_the_small_town_road_network() {
+        let map = TownMap::load_default();
+
+        assert_eq!((map.width, map.height), (31, 15));
+        assert!(is_road(&map, IVec2::new(0, 7)));
+        assert!(is_road(&map, IVec2::new(30, 7)));
+        assert!(is_road(&map, IVec2::new(16, 4)));
+        assert!(!is_road(&map, IVec2::new(0, 0)));
+    }
+
+    #[test]
+    fn rural_branch_routes_into_the_center_grid() {
+        let map = TownMap::load_default();
+        let path = road_path(&map, IVec2::new(10, 0), IVec2::new(20, 10))
+            .expect("branch and center grid should be connected");
+
+        assert_eq!(path.first(), Some(&IVec2::new(10, 0)));
+        assert_eq!(path.last(), Some(&IVec2::new(20, 10)));
     }
 
     #[test]
