@@ -22,7 +22,7 @@ pub fn render(
     let start = IVec2::new(world::BOARD_WIDTH / 2, world::BOARD_HEIGHT / 2);
     let truck = commands
         .spawn((
-            Transform::from_translation(world::grid_to_world(start).extend(2.0)),
+            Transform::from_translation(world::grid_to_world(start).extend(3.0)),
             Truck { route: Vec::new() },
         ))
         .id();
@@ -124,11 +124,19 @@ pub fn update_clicks(
         }
         let start = world::world_to_grid(transform.translation.truncate());
         if let Some(path) = world::road_path(start, target) {
+            info!(
+                ?start,
+                ?target,
+                waypoints = path.len(),
+                "truck route assigned"
+            );
             truck.route = path
                 .into_iter()
                 .skip(1)
                 .map(|grid| world::grid_to_world(grid).extend(2.0))
                 .collect();
+        } else {
+            warn!(?start, ?target, "no road route found for truck");
         }
     }
 }

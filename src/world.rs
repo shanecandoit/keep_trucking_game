@@ -234,7 +234,7 @@ fn render_buildings(
     for spec in building_specs() {
         let building = commands
             .spawn((
-                Transform::from_translation(grid_to_world(spec.grid).extend(1.0)),
+                Transform::from_translation(grid_to_world(spec.grid).extend(2.0)),
                 Building,
             ))
             .id();

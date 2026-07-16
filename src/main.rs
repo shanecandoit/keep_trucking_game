@@ -10,7 +10,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Keep Trucking - Isometric Skeleton".into(),
+                title: "Keep Trucking - Isometric Trucking Tycoon".into(),
                 resolution: (1200.0, 800.0).into(),
                 ..default()
             }),
@@ -35,7 +35,10 @@ fn update(
     mut trucks: Query<(&mut Transform, &mut truck::Truck)>,
     mut debug_text: Query<&mut Text, With<debug::DebugText>>,
     mut focus: ResMut<ui::Focus>,
-    gizmos: Gizmos,
+    mut focus_visuals: Query<
+        (&mut Transform, &mut Visibility, &ui::FocusVisual),
+        Without<truck::Truck>,
+    >,
 ) {
     ui::update(
         &buttons,
@@ -43,7 +46,7 @@ fn update(
         cameras,
         truck_positions,
         &mut focus,
-        gizmos,
+        &mut focus_visuals,
     );
     truck::update_clicks(buttons, windows, cameras, &focus, &mut trucks);
     debug::update_cursor(windows, cameras, &mut debug_text);
@@ -66,5 +69,5 @@ fn render(
     );
     truck::render(&mut commands, &mut meshes, &mut materials);
     debug::render(&mut commands);
-    ui::render(&mut commands);
+    ui::render(&mut commands, &mut meshes, &mut materials);
 }
