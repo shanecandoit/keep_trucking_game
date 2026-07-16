@@ -1,15 +1,22 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
+use crate::truck::Truck;
+use crate::ui::Focus;
 use crate::world;
 
+use super::SimClock;
+
 #[derive(Component)]
-pub struct DebugText;
+pub struct DebugStats;
+
+#[derive(Component)]
+pub struct DebugCursor;
 
 pub fn render(commands: &mut Commands) {
     commands.spawn((
-        Text::new("Click a tile to send the truck there\nMouse debug:"),
-        DebugText,
+        Text::new(""),
+        DebugStats,
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(24.0),
@@ -17,15 +24,61 @@ pub fn render(commands: &mut Commands) {
             ..default()
         },
     ));
+    commands.spawn((
+        Text::new(""),
+        DebugCursor,
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(24.0),
+            right: Val::Px(24.0),
+            ..default()
+        },
+    ));
 }
 
-pub fn update_cursor(
+#[allow(clippy::too_many_arguments)]
+pub fn update(
+    time: &Time,
+    sim_clock: &SimClock,
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
-    debug_text: &mut Query<&mut Text, With<DebugText>>,
+    trucks: &Query<(Entity, &mut Transform, &mut Truck)>,
+    mut debug_stats: Query<&mut Text, With<DebugStats>>,
+    mut debug_cursor: Query<&mut Text, (With<DebugCursor>, Without<DebugStats>)>,
+    focus: &Focus,
     map: &world::TownMap,
 ) {
-    let Ok(window) = windows.single() else { return };
+    let truck_count = trucks.iter().count();
+    let fps = 1.0 / time.delta_secs();
+
+
+    let selected_line = match focus.selected {
+        Some(entity) => {
+            let route_len = trucks
+                .iter()
+                .find(|(e, _, _)| *e == entity)
+                .map(|(_, _, truck)| truck.route.len())
+                .unwrap_or(0);
+            let task = if route_len > 0 { "driving" } else { "idle" };
+            format!(
+                "selected entity: {entity:?}\nroute waypoints: {route_len}\ncurrent task: {task}"
+            )
+        }
+        None => "selected entity: none\nroute waypoints: 0\ncurrent task: none".to_string(),
+    };
+
+    for mut text in debug_stats.iter_mut() {
+        *text = Text::new(format!(
+            "FPS: {fps:.0}\nentities (trucks): {truck_count}\nsim time: {:.1}s ({})\n{}",
+            sim_clock.elapsed_secs(),
+            sim_clock.speed_label(),
+            selected_line
+        ));
+    }
+
+    let Ok(window) = windows.single() else {
+        return;
+    };
     let Ok((camera, camera_transform)) = cameras.single() else {
         return;
     };
@@ -37,11 +90,20 @@ pub fn update_cursor(
     };
     let top_down = world::iso_to_top_down(iso_world - world::board_origin(map));
     let grid = IVec2::new(top_down.x.round() as i32, top_down.y.round() as i32);
+    let hovered = world::in_board(map, grid);
 
-    for mut text in debug_text.iter_mut() {
+    for mut text in debug_cursor.iter_mut() {
         *text = Text::new(format!(
-            "Click a tile to send the truck there\nMouse debug:\nscreen: ({:.0}, {:.0})\niso world: ({:.1}, {:.1})\ntop-down: ({:.2}, {:.2})\ntile: ({}, {})",
-            screen.x, screen.y, iso_world.x, iso_world.y, top_down.x, top_down.y, grid.x, grid.y
+            "Mouse debug:\nscreen: ({:.0}, {:.0})\niso world: ({:.1}, {:.1})\ntop-down: ({:.2}, {:.2})\ntile: ({}, {}){}",
+            screen.x,
+            screen.y,
+            iso_world.x,
+            iso_world.y,
+            top_down.x,
+            top_down.y,
+            grid.x,
+            grid.y,
+            if hovered { "" } else { " (off-board)" }
         ));
     }
 }

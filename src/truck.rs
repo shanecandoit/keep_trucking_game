@@ -77,8 +77,8 @@ pub fn draw_trucks(
         .add_children(&[top_entity, left_entity, right_entity]);
 }
 
-pub fn update(time: Res<Time>, trucks: &mut Query<(&mut Transform, &mut Truck)>) {
-    for (mut transform, mut truck) in trucks.iter_mut() {
+pub fn update(time: &Time, trucks: &mut Query<(Entity, &mut Transform, &mut Truck)>) {
+    for (_entity, mut transform, mut truck) in trucks.iter_mut() {
         let Some(destination) = truck.route.first().copied() else {
             continue;
         };
@@ -98,7 +98,7 @@ pub fn update_clicks(
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
     focus: &Focus,
-    trucks: &mut Query<(&mut Transform, &mut Truck)>,
+    trucks: &mut Query<(Entity, &mut Transform, &mut Truck)>,
     map: &world::TownMap,
 ) {
     if !buttons.just_pressed(MouseButton::Left) || focus.click_consumed {
@@ -120,7 +120,7 @@ pub fn update_clicks(
         .or_else(|| world::is_road(map, clicked).then_some(clicked));
     let Some(target) = target else { return };
 
-    for (transform, mut truck) in trucks.iter_mut() {
+    for (_, transform, mut truck) in trucks.iter_mut() {
         if focus.selected.is_none() {
             continue;
         }
