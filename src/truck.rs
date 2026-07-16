@@ -77,13 +77,13 @@ pub fn draw_trucks(
         .add_children(&[top_entity, left_entity, right_entity]);
 }
 
-pub fn update(time: &Time, trucks: &mut Query<(Entity, &mut Transform, &mut Truck)>) {
+pub fn update(sim_delta: f32, trucks: &mut Query<(Entity, &mut Transform, &mut Truck)>) {
     for (_entity, mut transform, mut truck) in trucks.iter_mut() {
         let Some(destination) = truck.route.first().copied() else {
             continue;
         };
         let distance = transform.translation.distance(destination);
-        let step = TRUCK_SPEED * time.delta_secs();
+        let step = TRUCK_SPEED * sim_delta;
         if distance <= step {
             transform.translation = destination;
             truck.route.remove(0);

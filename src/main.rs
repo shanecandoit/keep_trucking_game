@@ -14,11 +14,16 @@ use bevy::window::PrimaryWindow;
 pub struct SimClock {
     elapsed: f32,
     speed: SimSpeed,
+    last_delta: f32,
 }
 
 impl SimClock {
     pub fn elapsed_secs(&self) -> f32 {
         self.elapsed
+    }
+
+    pub fn delta_secs(&self) -> f32 {
+        self.last_delta
     }
 
     pub fn speed_label(&self) -> &'static str {
@@ -29,8 +34,13 @@ impl SimClock {
         }
     }
 
+    pub fn is_paused(&self) -> bool {
+        matches!(self.speed, SimSpeed::Paused)
+    }
+
     pub fn tick(&mut self, delta: f32) {
-        self.elapsed += delta * self.speed.multiplier();
+        self.last_delta = delta * self.speed.multiplier();
+        self.elapsed += self.last_delta;
     }
 
     pub fn cycle_speed(&mut self) {
@@ -78,6 +88,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.12, 0.10, 0.07)))
         .add_systems(Startup, render)
         .add_systems(Update, update)
+        .add_systems(Update, debug::update_pause)
         .run();
 }
 
@@ -131,7 +142,7 @@ fn update(
         &focus,
         &map,
     );
-    truck::update(&time, &mut trucks);
+    truck::update(sim_clock.delta_secs(), &mut trucks);
 }
 
 /// High-level scene construction. Bevy handles frame rendering after this.

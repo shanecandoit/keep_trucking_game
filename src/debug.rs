@@ -13,6 +13,9 @@ pub struct DebugStats;
 #[derive(Component)]
 pub struct DebugCursor;
 
+#[derive(Component)]
+pub struct PauseOverlay;
+
 pub fn render(commands: &mut Commands) {
     commands.spawn((
         Text::new(""),
@@ -34,6 +37,33 @@ pub fn render(commands: &mut Commands) {
             ..default()
         },
     ));
+    commands.spawn((
+        Text::new("⏸ paused"),
+        PauseOverlay,
+        TextColor(Color::srgb(0.95, 0.85, 0.2)),
+        TextFont {
+            font_size: 11.0,
+            ..default()
+        },
+        Visibility::Hidden,
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(4.0),
+            left: Val::Px(4.0),
+            ..default()
+        },
+    ));
+}
+
+pub fn update_pause(sim_clock: Res<SimClock>, mut overlay: Query<&mut Visibility, With<PauseOverlay>>) {
+    let visible = sim_clock.is_paused();
+    for mut visibility in overlay.iter_mut() {
+        *visibility = if visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
