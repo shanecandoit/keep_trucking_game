@@ -1,4 +1,5 @@
 use bevy::asset::RenderAssetUsages;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::window::PrimaryWindow;
@@ -11,10 +12,33 @@ const TRUCK_SCALE: f32 = 0.62;
 // Roughly two road tiles per second at normal simulation speed. Keeping this
 // tied to the visible road scale makes cross-town routes feel consequential.
 const TRUCK_SPEED: f32 = 65.0;
+const ROUTE_DOT_Z: f32 = 1.25;
+
+#[derive(Resource)]
+pub struct RouteDebugAssets {
+    waypoint_mesh: Handle<Mesh>,
+    destination_mesh: Handle<Mesh>,
+    waypoint_material: Handle<ColorMaterial>,
+    destination_material: Handle<ColorMaterial>,
+}
+
+#[derive(Component)]
+pub struct RouteWaypointDebug {
+    owner: Entity,
+    route_revision: u64,
+    waypoint: Vec3,
+}
+
+#[derive(SystemParam)]
+pub struct RouteDebug<'w, 's> {
+    commands: Commands<'w, 's>,
+    assets: Res<'w, RouteDebugAssets>,
+}
 
 #[derive(Component)]
 pub struct Truck {
     pub route: Vec<Vec3>,
+    route_revision: u64,
 }
 
 pub fn draw_trucks(
@@ -23,12 +47,23 @@ pub fn draw_trucks(
     materials: &mut Assets<ColorMaterial>,
     map: &world::TownMap,
 ) {
+    commands.insert_resource(RouteDebugAssets {
+        waypoint_mesh: meshes.add(Circle::new(3.25)),
+        destination_mesh: meshes.add(Circle::new(5.0)),
+        waypoint_material: materials.add(ColorMaterial::from(Color::srgba(0.15, 0.95, 0.95, 0.78))),
+        destination_material: materials
+            .add(ColorMaterial::from(Color::srgba(0.98, 0.75, 0.16, 0.95))),
+    });
+
     let start = map.center();
     let truck = commands
         .spawn((
             Transform::from_translation(world::grid_to_world(map, start).extend(3.0))
                 .with_scale(Vec3::splat(TRUCK_SCALE)),
-            Truck { route: Vec::new() },
+            Truck {
+                route: Vec::new(),
+                route_revision: 0,
+            },
         ))
         .id();
 
@@ -104,6 +139,7 @@ pub fn update_clicks(
     focus: &Focus,
     trucks: &mut Query<(Entity, &mut Transform, &mut Truck)>,
     map: &world::TownMap,
+    debug: &mut RouteDebug,
 ) {
     if !buttons.just_pressed(MouseButton::Left) || focus.click_consumed {
         return;
@@ -124,8 +160,8 @@ pub fn update_clicks(
         .or_else(|| world::is_road(map, clicked).then_some(clicked));
     let Some(target) = target else { return };
 
-    for (_, transform, mut truck) in trucks.iter_mut() {
-        if focus.selected.is_none() {
+    for (entity, transform, mut truck) in trucks.iter_mut() {
+        if focus.selected != Some(entity) {
             continue;
         }
         let start = world::world_to_grid(map, transform.translation.truncate());
@@ -141,10 +177,75 @@ pub fn update_clicks(
                 .skip(1)
                 .map(|grid| world::grid_to_world(map, grid).extend(3.0))
                 .collect();
+            truck.route_revision = truck.route_revision.wrapping_add(1);
+            let assets = &debug.assets;
+            spawn_route_debug(
+                &mut debug.commands,
+                entity,
+                truck.route_revision,
+                &truck.route,
+                assets,
+            );
         } else {
             warn!(?start, ?target, "no road route found for truck");
         }
     }
+}
+
+fn spawn_route_debug(
+    commands: &mut Commands,
+    owner: Entity,
+    route_revision: u64,
+    route: &[Vec3],
+    assets: &RouteDebugAssets,
+) {
+    let last_index = route.len().saturating_sub(1);
+    for (index, waypoint) in route.iter().copied().enumerate() {
+        let is_destination = index == last_index;
+        commands.spawn((
+            Mesh2d(if is_destination {
+                assets.destination_mesh.clone()
+            } else {
+                assets.waypoint_mesh.clone()
+            }),
+            MeshMaterial2d(if is_destination {
+                assets.destination_material.clone()
+            } else {
+                assets.waypoint_material.clone()
+            }),
+            Transform::from_translation(waypoint.truncate().extend(ROUTE_DOT_Z)),
+            RouteWaypointDebug {
+                owner,
+                route_revision,
+                waypoint,
+            },
+        ));
+    }
+}
+
+pub fn sync_route_debug(
+    mut commands: Commands,
+    waypoints: Query<(Entity, &RouteWaypointDebug)>,
+    trucks: Query<(Entity, &Truck)>,
+) {
+    for (entity, marker) in waypoints.iter() {
+        let active = trucks
+            .iter()
+            .find(|(truck, _)| *truck == marker.owner)
+            .is_some_and(|(_, truck)| {
+                marker.route_revision == truck.route_revision
+                    && route_contains_waypoint(&truck.route, marker.waypoint)
+            });
+        if !active {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+fn route_contains_waypoint(route: &[Vec3], waypoint: Vec3) -> bool {
+    route
+        .iter()
+        .any(|candidate| candidate.distance_squared(waypoint) < 0.001)
 }
 
 fn face_mesh(vertices: &[[f32; 3]; 4]) -> Mesh {
@@ -155,4 +256,24 @@ fn face_mesh(vertices: &[[f32; 3]; 4]) -> Mesh {
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.to_vec());
     mesh.insert_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]));
     mesh
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn route_debug_only_keeps_unconsumed_waypoints() {
+        let first = Vec3::new(1.0, 2.0, 3.0);
+        let second = Vec3::new(4.0, 5.0, 3.0);
+        let mut route = vec![first, second];
+
+        assert!(route_contains_waypoint(&route, first));
+        assert!(route_contains_waypoint(&route, second));
+
+        route.remove(0);
+
+        assert!(!route_contains_waypoint(&route, first));
+        assert!(route_contains_waypoint(&route, second));
+    }
 }

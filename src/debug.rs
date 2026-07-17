@@ -84,17 +84,31 @@ pub fn update(
 
     let selected_line = match focus.selected {
         Some(entity) => {
-            let route_len = trucks
+            let route = trucks
                 .iter()
                 .find(|(e, _, _)| *e == entity)
-                .map(|(_, _, truck)| truck.route.len())
-                .unwrap_or(0);
+                .map(|(_, _, truck)| truck.route.as_slice())
+                .unwrap_or_default();
+            let route_len = route.len();
             let task = if route_len > 0 { "driving" } else { "idle" };
+            let next = route
+                .first()
+                .map(|point| world::world_to_grid(map, point.truncate()));
+            let destination = route
+                .last()
+                .map(|point| world::world_to_grid(map, point.truncate()));
+            let route_coordinates = match (next, destination) {
+                (Some(next), Some(destination)) => format!(
+                    "next waypoint: ({}, {})\ndestination: ({}, {})",
+                    next.x, next.y, destination.x, destination.y
+                ),
+                _ => "next waypoint: none\ndestination: none".to_string(),
+            };
             format!(
-                "selected entity: {entity:?}\nroute waypoints: {route_len}\ncurrent task: {task}"
+                "selected entity: {entity:?}\nroute waypoints: {route_len}\n{route_coordinates}\ncurrent task: {task}"
             )
         }
-        None => "selected entity: none\nroute waypoints: 0\ncurrent task: none".to_string(),
+        None => "selected entity: none\nroute waypoints: 0\nnext waypoint: none\ndestination: none\ncurrent task: none".to_string(),
     };
 
     for mut text in debug_stats.iter_mut() {

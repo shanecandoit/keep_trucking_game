@@ -88,6 +88,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.12, 0.10, 0.07)))
         .add_systems(Startup, render)
         .add_systems(Update, update)
+        .add_systems(Update, truck::sync_route_debug.after(update))
         .add_systems(Update, camera::zoom)
         .add_systems(Update, debug::update_pause)
         .run();
@@ -111,6 +112,7 @@ fn update(
     mut pan_state: ResMut<camera::PanState>,
     mut sim_clock: ResMut<SimClock>,
     map: Res<world::TownMap>,
+    mut route_debug: truck::RouteDebug,
     mut focus_visuals: Query<
         (&mut Transform, &mut Visibility, &ui::FocusVisual),
         (Without<truck::Truck>, Without<Camera>),
@@ -131,7 +133,15 @@ fn update(
         &mut focus_visuals,
         &map,
     );
-    truck::update_clicks(buttons, windows, cameras, &focus, &mut trucks, &map);
+    truck::update_clicks(
+        buttons,
+        windows,
+        cameras,
+        &focus,
+        &mut trucks,
+        &map,
+        &mut route_debug,
+    );
     debug::update(
         &time,
         &sim_clock,
