@@ -1,5 +1,10 @@
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+
+pub const INITIAL_SCALE: f32 = 1.65;
+const MIN_SCALE: f32 = 0.65;
+const MAX_SCALE: f32 = 2.4;
 
 #[derive(Resource, Default)]
 pub struct PanState {
@@ -46,5 +51,25 @@ pub fn update(
     let world_delta = Vec3::new(-delta.x, delta.y, 0.0);
     for mut transform in cameras.iter_mut() {
         transform.translation += world_delta;
+    }
+}
+
+pub fn zoom(mut wheel: EventReader<MouseWheel>, mut cameras: Query<&mut Projection, With<Camera>>) {
+    let amount = wheel.read().fold(0.0, |total, event| {
+        total
+            + match event.unit {
+                MouseScrollUnit::Line => event.y,
+                MouseScrollUnit::Pixel => event.y / 20.0,
+            }
+    });
+    if amount == 0.0 {
+        return;
+    }
+
+    for mut projection in cameras.iter_mut() {
+        if let Projection::Orthographic(orthographic) = projection.as_mut() {
+            orthographic.scale =
+                (orthographic.scale * 0.88_f32.powf(amount)).clamp(MIN_SCALE, MAX_SCALE);
+        }
     }
 }

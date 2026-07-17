@@ -8,6 +8,8 @@ pub const TILE_HEIGHT: f32 = 27.0;
 const BUILDING_HALF_WIDTH: f32 = 42.0;
 const BUILDING_HALF_HEIGHT: f32 = 35.0;
 const BUILDING_GAP: f32 = 2.0;
+const RESIDENCE_SCALE: f32 = 0.68;
+const BUSINESS_SCALE: f32 = 0.82;
 
 const SMALL_TOWN_ASCII: &str = include_str!("../assets/maps/small_town.txt");
 
@@ -145,8 +147,11 @@ pub fn draw_bg(
     road_tier: RoadTier,
 ) {
     let diamond = meshes.add(isometric_tile_mesh());
-    let sand = materials.add(ColorMaterial::from(Color::srgb(0.69, 0.60, 0.43)));
-    let scrub = materials.add(ColorMaterial::from(Color::srgb(0.61, 0.57, 0.40)));
+    let terrain = [
+        materials.add(ColorMaterial::from(Color::srgb(0.69, 0.60, 0.43))),
+        materials.add(ColorMaterial::from(Color::srgb(0.66, 0.58, 0.41))),
+        materials.add(ColorMaterial::from(Color::srgb(0.63, 0.57, 0.40))),
+    ];
     let gravel = materials.add(ColorMaterial::from(road_tier.base_color()));
     let pebble = road_tier.pebble_color();
 
@@ -155,10 +160,8 @@ pub fn draw_bg(
             let grid = IVec2::new(x, y);
             let material = if is_road(map, grid) {
                 gravel.clone()
-            } else if (x + y) % 2 == 0 {
-                sand.clone()
             } else {
-                scrub.clone()
+                terrain[terrain_variant(grid)].clone()
             };
 
             let tile = commands
@@ -173,6 +176,21 @@ pub fn draw_bg(
                 render_gravel_pebbles(commands, tile, grid, pebble);
             }
         }
+    }
+}
+
+// Broad, deterministic patches keep the ground varied without outlining every
+// logical tile like a checkerboard.
+fn terrain_variant(grid: IVec2) -> usize {
+    let patch_x = grid.x.div_euclid(4);
+    let patch_y = grid.y.div_euclid(4);
+    let hash = patch_x
+        .wrapping_mul(73_856_093)
+        .wrapping_add(patch_y.wrapping_mul(19_349_663));
+    match hash.rem_euclid(7) {
+        0..=4 => 0,
+        5 => 1,
+        _ => 2,
     }
 }
 
@@ -320,9 +338,14 @@ pub fn draw_buildings(
     let person_material = materials.add(ColorMaterial::from(Color::srgb(0.08, 0.10, 0.11)));
 
     for spec in building_specs(map) {
+        let scale = match spec.kind {
+            BuildingKind::Residence => RESIDENCE_SCALE,
+            BuildingKind::Business => BUSINESS_SCALE,
+        };
         let building = commands
             .spawn((
-                Transform::from_translation(grid_to_world(map, spec.grid).extend(2.0)),
+                Transform::from_translation(grid_to_world(map, spec.grid).extend(2.0))
+                    .with_scale(Vec3::splat(scale)),
                 Building,
                 spec.kind,
             ))
@@ -369,7 +392,10 @@ pub fn draw_buildings(
 }
 
 pub fn board_origin(map: &TownMap) -> Vec2 {
-    Vec2::new(0.0, -((map.width + map.height) as f32 * TILE_HEIGHT * 0.25))
+    Vec2::new(
+        -((map.width - map.height) as f32 * TILE_WIDTH * 0.25),
+        -((map.width + map.height - 2) as f32 * TILE_HEIGHT * 0.25),
+    )
 }
 
 pub fn grid_to_world(map: &TownMap, grid: IVec2) -> Vec2 {
@@ -450,10 +476,10 @@ mod tests {
     fn ascii_map_loads_the_small_town_road_network() {
         let map = TownMap::load_default();
 
-        assert_eq!((map.width, map.height), (31, 15));
-        assert!(is_road(&map, IVec2::new(0, 7)));
-        assert!(is_road(&map, IVec2::new(30, 7)));
-        assert!(is_road(&map, IVec2::new(16, 4)));
+        assert_eq!((map.width, map.height), (51, 25));
+        assert!(is_road(&map, IVec2::new(0, 12)));
+        assert!(is_road(&map, IVec2::new(50, 12)));
+        assert!(is_road(&map, IVec2::new(25, 8)));
         assert!(!is_road(&map, IVec2::new(0, 0)));
         assert_eq!(
             map.buildings
@@ -467,7 +493,7 @@ mod tests {
                 .iter()
                 .filter(|building| building.kind == BuildingKind::Business)
                 .count(),
-            7
+            8
         );
         assert!(
             map.buildings
@@ -479,11 +505,28 @@ mod tests {
     #[test]
     fn rural_branch_routes_into_the_center_grid() {
         let map = TownMap::load_default();
-        let path = road_path(&map, IVec2::new(10, 0), IVec2::new(20, 10))
+        let path = road_path(&map, IVec2::new(10, 2), IVec2::new(40, 20))
             .expect("branch and center grid should be connected");
 
-        assert_eq!(path.first(), Some(&IVec2::new(10, 0)));
-        assert_eq!(path.last(), Some(&IVec2::new(20, 10)));
+        assert_eq!(path.first(), Some(&IVec2::new(10, 2)));
+        assert_eq!(path.last(), Some(&IVec2::new(40, 20)));
+        assert!(path.len() > 40, "rural destinations should feel far apart");
+    }
+
+    #[test]
+    fn most_of_the_rural_map_remains_undeveloped() {
+        let map = TownMap::load_default();
+        let developed_tiles = map.roads.len() + map.buildings.len();
+        let total_tiles = (map.width * map.height) as usize;
+
+        assert!(developed_tiles * 5 < total_tiles);
+    }
+
+    #[test]
+    fn odd_sized_map_is_centered_on_its_center_tile() {
+        let map = TownMap::load_default();
+
+        assert!(grid_to_world(&map, map.center()).length() < 0.0001);
     }
 
     #[test]

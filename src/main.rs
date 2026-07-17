@@ -88,6 +88,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.12, 0.10, 0.07)))
         .add_systems(Startup, render)
         .add_systems(Update, update)
+        .add_systems(Update, camera::zoom)
         .add_systems(Update, debug::update_pause)
         .run();
 }
@@ -153,7 +154,13 @@ fn render(
     road_network: Res<world::RoadNetwork>,
     map: Res<world::TownMap>,
 ) {
-    commands.spawn(Camera2d);
+    commands.spawn((
+        Camera2d,
+        Projection::Orthographic(OrthographicProjection {
+            scale: camera::INITIAL_SCALE,
+            ..OrthographicProjection::default_2d()
+        }),
+    ));
     draw_bg(
         &mut commands,
         &mut meshes,

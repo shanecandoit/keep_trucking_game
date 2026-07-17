@@ -7,7 +7,10 @@ use crate::ui::Focus;
 use crate::world;
 
 const TRUCK_WIDTH: f32 = 30.0;
-const TRUCK_SPEED: f32 = 260.0;
+const TRUCK_SCALE: f32 = 0.62;
+// Roughly two road tiles per second at normal simulation speed. Keeping this
+// tied to the visible road scale makes cross-town routes feel consequential.
+const TRUCK_SPEED: f32 = 65.0;
 
 #[derive(Component)]
 pub struct Truck {
@@ -23,7 +26,8 @@ pub fn draw_trucks(
     let start = map.center();
     let truck = commands
         .spawn((
-            Transform::from_translation(world::grid_to_world(map, start).extend(3.0)),
+            Transform::from_translation(world::grid_to_world(map, start).extend(3.0))
+                .with_scale(Vec3::splat(TRUCK_SCALE)),
             Truck { route: Vec::new() },
         ))
         .id();
