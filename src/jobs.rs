@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::SimClock;
@@ -223,9 +224,120 @@ pub struct Contracts {
 }
 
 #[derive(Component)]
-pub struct JobDebug;
+pub struct JobTablet;
 
-pub fn setup(mut commands: Commands, map: Res<world::TownMap>, mut session: ResMut<GameSession>) {
+#[derive(Component)]
+pub struct JobCardTitle;
+
+#[derive(Component)]
+pub struct JobCardBody;
+
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+pub enum JobAction {
+    Accept,
+    Reject,
+    Dispatch,
+}
+
+#[derive(SystemParam)]
+pub(crate) struct JobInputUi<'w, 's> {
+    keys: Res<'w, ButtonInput<KeyCode>>,
+    focus: Res<'w, Focus>,
+    presentation: ResMut<'w, JobPresentation>,
+    actions: Query<'w, 's, (&'static Interaction, &'static JobAction), With<Button>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CardView {
+    Offer,
+    Active,
+    Hidden,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CardTransition {
+    target: CardView,
+    elapsed: f32,
+}
+
+#[derive(Resource, Debug)]
+pub struct JobPresentation {
+    view: CardView,
+    transition: Option<CardTransition>,
+}
+
+impl Default for JobPresentation {
+    fn default() -> Self {
+        Self {
+            view: CardView::Offer,
+            transition: None,
+        }
+    }
+}
+
+impl JobPresentation {
+    fn swipe_to(&mut self, target: CardView) {
+        self.transition = Some(CardTransition {
+            target,
+            elapsed: 0.0,
+        });
+    }
+}
+
+fn advance_card_transition(presentation: &mut JobPresentation, delta_secs: f32) -> f32 {
+    let Some(mut transition) = presentation.transition else {
+        return 0.0;
+    };
+    transition.elapsed += delta_secs;
+    if transition.target == CardView::Hidden {
+        let progress = (transition.elapsed / 0.24).min(1.0);
+        if progress >= 1.0 {
+            presentation.view = CardView::Hidden;
+            presentation.transition = None;
+        } else {
+            presentation.transition = Some(transition);
+        }
+        return progress * 480.0;
+    }
+
+    let half = 0.22;
+    if transition.elapsed < half {
+        presentation.transition = Some(transition);
+        return transition.elapsed / half * 480.0;
+    }
+    presentation.view = transition.target;
+    let progress = ((transition.elapsed - half) / half).min(1.0);
+    if progress >= 1.0 {
+        presentation.transition = None;
+    } else {
+        presentation.transition = Some(transition);
+    }
+    (1.0 - progress) * 480.0
+}
+
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+enum JobPoiKind {
+    Pickup,
+    Dropoff,
+}
+
+struct PoiColors {
+    halo: Color,
+    ring: Color,
+}
+
+#[derive(Component)]
+pub struct JobPoi {
+    kind: JobPoiKind,
+}
+
+pub fn setup(
+    mut commands: Commands,
+    map: Res<world::TownMap>,
+    mut session: ResMut<GameSession>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
     let buildings = world::building_specs(&map);
     assert!(
         buildings.len() >= 2,
@@ -267,50 +379,226 @@ pub fn setup(mut commands: Commands, map: Res<world::TownMap>, mut session: ResM
         "tow call generated"
     );
     commands.insert_resource(Contracts { current: contract });
-    commands.spawn((
-        Text::new(""),
-        JobDebug,
-        TextFont {
-            font_size: 15.0,
-            ..default()
+    commands.insert_resource(JobPresentation::default());
+    spawn_job_tablet(&mut commands);
+    spawn_job_poi(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &map,
+        pickup,
+        JobPoiKind::Pickup,
+        PoiColors {
+            halo: Color::srgba(0.15, 0.95, 0.95, 0.18),
+            ring: Color::srgba(0.15, 0.95, 0.95, 0.88),
         },
-        TextColor(Color::srgb(0.96, 0.91, 0.78)),
-        BackgroundColor(Color::srgba(0.055, 0.05, 0.04, 0.90)),
-        Interaction::default(),
-        ScreenPanel,
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(24.0),
-            bottom: Val::Px(110.0),
-            width: Val::Px(620.0),
-            min_height: Val::Px(146.0),
-            padding: UiRect::all(Val::Px(12.0)),
-            ..default()
+    );
+    spawn_job_poi(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &map,
+        dropoff,
+        JobPoiKind::Dropoff,
+        PoiColors {
+            halo: Color::srgba(1.0, 0.68, 0.14, 0.18),
+            ring: Color::srgba(1.0, 0.68, 0.14, 0.92),
         },
-    ));
+    );
+}
+
+fn spawn_job_tablet(commands: &mut Commands) {
+    commands
+        .spawn((
+            JobTablet,
+            ScreenPanel,
+            Interaction::default(),
+            BackgroundColor(Color::srgb(0.12, 0.13, 0.13)),
+            Node {
+                position_type: PositionType::Absolute,
+                right: Val::Px(24.0),
+                bottom: Val::Px(24.0),
+                width: Val::Px(430.0),
+                height: Val::Px(520.0),
+                padding: UiRect::all(Val::Px(13.0)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(8.0),
+                ..default()
+            },
+        ))
+        .with_children(|tablet| {
+            tablet.spawn((
+                Text::new("KEEP TRUCKING  /  FIELD TABLET"),
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.68, 0.72, 0.70)),
+                Node {
+                    height: Val::Px(18.0),
+                    ..default()
+                },
+            ));
+            tablet
+                .spawn((
+                    BackgroundColor(Color::srgb(0.88, 0.84, 0.70)),
+                    Node {
+                        width: Val::Percent(100.0),
+                        flex_grow: 1.0,
+                        padding: UiRect::all(Val::Px(18.0)),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: Val::Px(9.0),
+                        ..default()
+                    },
+                ))
+                .with_children(|paper| {
+                    paper.spawn((
+                        Text::new("TOW REQUEST"),
+                        JobCardTitle,
+                        TextFont {
+                            font_size: 22.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.16, 0.17, 0.15)),
+                    ));
+                    paper.spawn((
+                        Text::new(""),
+                        JobCardBody,
+                        TextFont {
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.20, 0.21, 0.18)),
+                        Node {
+                            flex_grow: 1.0,
+                            ..default()
+                        },
+                    ));
+                    paper
+                        .spawn((Node {
+                            height: Val::Px(42.0),
+                            column_gap: Val::Px(10.0),
+                            justify_content: JustifyContent::FlexEnd,
+                            ..default()
+                        },))
+                        .with_children(|actions| {
+                            spawn_job_button(
+                                actions,
+                                JobAction::Reject,
+                                "REJECT",
+                                Color::srgb(0.50, 0.18, 0.14),
+                            );
+                            spawn_job_button(
+                                actions,
+                                JobAction::Accept,
+                                "ACCEPT",
+                                Color::srgb(0.18, 0.43, 0.27),
+                            );
+                            spawn_job_button(
+                                actions,
+                                JobAction::Dispatch,
+                                "DISPATCH",
+                                Color::srgb(0.18, 0.38, 0.48),
+                            );
+                        });
+                });
+        });
+}
+
+fn spawn_job_button(
+    actions: &mut ChildSpawnerCommands,
+    action: JobAction,
+    label: &str,
+    color: Color,
+) {
+    actions
+        .spawn((
+            Button,
+            action,
+            BackgroundColor(color),
+            Node {
+                width: Val::Px(106.0),
+                height: Val::Px(38.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+        ))
+        .with_child((
+            Text::new(label),
+            TextFont {
+                font_size: 14.0,
+                ..default()
+            },
+            TextColor(Color::srgb(0.98, 0.96, 0.88)),
+        ));
+}
+
+fn spawn_job_poi(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    map: &world::TownMap,
+    grid: IVec2,
+    kind: JobPoiKind,
+    colors: PoiColors,
+) {
+    let halo = meshes.add(Circle::new(12.0));
+    let ring = meshes.add(Annulus::new(6.0, 9.0));
+    let halo_material = materials.add(ColorMaterial::from(colors.halo));
+    let ring_material = materials.add(ColorMaterial::from(colors.ring));
+    commands
+        .spawn((
+            JobPoi { kind },
+            Transform::from_translation(world::grid_to_world(map, grid).extend(1.45)),
+            Visibility::Hidden,
+        ))
+        .with_children(|marker| {
+            marker.spawn((
+                Mesh2d(halo),
+                MeshMaterial2d(halo_material),
+                Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+            ));
+            marker.spawn((
+                Mesh2d(ring),
+                MeshMaterial2d(ring_material),
+                Transform::from_translation(Vec3::new(0.0, 0.0, 0.05)),
+            ));
+        });
 }
 
 pub fn handle_input(
-    keys: Res<ButtonInput<KeyCode>>,
     clock: Res<SimClock>,
-    focus: Res<Focus>,
     map: Res<world::TownMap>,
     mut contracts: ResMut<Contracts>,
+    mut ui: JobInputUi,
     mut trucks: Query<(Entity, &Transform, &mut Truck)>,
     mut route_debug: RouteDebug,
 ) {
+    let clicked = ui.actions.iter().find_map(|(interaction, action)| {
+        (*interaction == Interaction::Pressed).then_some(*action)
+    });
     let contract = &mut contracts.current;
-    if keys.just_pressed(KeyCode::KeyA) && contract.accept() {
+    let accept_requested =
+        ui.keys.just_pressed(KeyCode::KeyA) || clicked == Some(JobAction::Accept);
+    let reject_requested =
+        ui.keys.just_pressed(KeyCode::KeyD) || clicked == Some(JobAction::Reject);
+    let dispatch_requested =
+        ui.keys.just_pressed(KeyCode::KeyJ) || clicked == Some(JobAction::Dispatch);
+
+    if accept_requested && contract.accept() {
+        ui.presentation.swipe_to(CardView::Active);
         info!(contract = contract.id, "tow call accepted");
     }
-    if keys.just_pressed(KeyCode::KeyD) && contract.decline() {
+    if reject_requested && contract.decline() {
+        ui.presentation.swipe_to(CardView::Hidden);
         info!(contract = contract.id, "tow call declined");
     }
-    if !keys.just_pressed(KeyCode::KeyJ) || contract.state != TowState::Accepted {
+    if !dispatch_requested || contract.state != TowState::Accepted {
         return;
     }
 
-    let Some(selected) = focus.selected else {
+    let Some(selected) = ui.focus.selected else {
         warn!("select a truck before dispatching the accepted tow job");
         return;
     };
@@ -437,59 +725,210 @@ pub fn update_contracts(
     }
 }
 
-pub fn update_debug(
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
+pub fn update_tablet(
+    time: Res<Time>,
     clock: Res<SimClock>,
-    session: Res<GameSession>,
     company: Res<Company>,
     contracts: Res<Contracts>,
-    mut text: Query<&mut Text, With<JobDebug>>,
+    focus: Res<Focus>,
+    trucks: Query<(Entity, &Truck)>,
+    mut presentation: ResMut<JobPresentation>,
+    mut tablet: Query<(&mut Node, &mut Visibility), (With<JobTablet>, Without<Button>)>,
+    mut title: Query<&mut Text, (With<JobCardTitle>, Without<JobCardBody>)>,
+    mut body: Query<&mut Text, (With<JobCardBody>, Without<JobCardTitle>)>,
+    mut actions: Query<
+        (
+            &JobAction,
+            &Interaction,
+            &mut BackgroundColor,
+            &mut Visibility,
+        ),
+        (With<Button>, Without<JobTablet>),
+    >,
 ) {
     let contract = &contracts.current;
     let estimate = contract.estimate;
     let total_tiles = estimate.approach_tiles + estimate.tow_tiles;
     let remaining = (contract.expires_at - clock.elapsed_secs()).max(0.0);
     let offer_age = (clock.elapsed_secs() - contract.offered_at).max(0.0);
-    let controls = match contract.state {
-        TowState::Offered => "A accept | D decline",
-        TowState::Accepted => "Select truck, then J dispatch",
-        TowState::EnRoutePickup | TowState::EnRouteDropoff => "Space changes simulation speed",
-        TowState::HookingUp => "Hookup in progress",
-        _ => "",
-    };
-    let receipt = if contract.state == TowState::Completed {
-        format!(
-            "\nACTUAL  distance {:.1} tiles | time {:.1} min | fuel {:.2} gal\nCosts {} fuel + {} wear | contribution {}",
-            contract.actuals.approach_tiles + contract.actuals.tow_tiles,
-            contract.actuals.duration_secs,
-            contract.actuals.fuel_gallons,
-            format_money(contract.actuals.fuel_cost_cents),
-            format_money(contract.actuals.wear_reserve_cents),
-            format_money(contract.payout_cents - contract.actuals.operating_cost_cents()),
-        )
-    } else {
-        String::new()
+    let selected_truck = focus
+        .selected
+        .and_then(|selected| trucks.iter().find(|(entity, _)| *entity == selected));
+    let (dispatch_ready, dispatch_note) = match selected_truck {
+        None => (false, "Select a truck to dispatch".to_string()),
+        Some((_, truck)) if truck.active_contract.is_some() => {
+            (false, "Selected truck is already assigned".to_string())
+        }
+        Some((_, truck)) if truck.fuel_gallons + f32::EPSILON < estimate.fuel_gallons => (
+            false,
+            format!(
+                "Needs {:.1} gal; selected truck has {:.1} gal",
+                estimate.fuel_gallons, truck.fuel_gallons
+            ),
+        ),
+        Some((_, truck)) => (true, format!("Unit {} ready to dispatch", truck.id.0)),
     };
 
-    for mut output in text.iter_mut() {
-        *output = Text::new(format!(
-            "TOW CALL #{id} [{state}]  seed {seed:016X}\n{vehicle} | {urgency} | offered {offer_age:.0} min ago | expires in {remaining:.0} min\npickup ({px}, {py}) -> dropoff ({dx}, {dy})\nESTIMATE  {total_tiles} tiles | {duration:.1} min | {fuel:.2} gal\nPayout {payout} | costs {costs} | margin {margin}\nCompany {cash} | reputation {reputation}\n{controls}{receipt}",
-            id = contract.id,
-            state = contract.state.label(),
-            seed = session.seed,
-            vehicle = contract.vehicle.label(),
-            urgency = contract.urgency.label(),
-            px = contract.pickup.x,
-            py = contract.pickup.y,
-            dx = contract.dropoff.x,
-            dy = contract.dropoff.y,
-            duration = estimate.duration_secs,
-            fuel = estimate.fuel_gallons,
-            payout = format_money(contract.payout_cents),
-            costs = format_money(estimate.fuel_cost_cents + estimate.wear_reserve_cents),
-            margin = format_money(estimate.expected_margin_cents),
-            cash = format_money(company.cash_cents),
-            reputation = company.reputation,
+    let card_offset = advance_card_transition(&mut presentation, time.delta_secs());
+
+    for (mut node, mut visibility) in tablet.iter_mut() {
+        node.right = Val::Px(24.0 - card_offset);
+        *visibility = if presentation.view == CardView::Hidden && presentation.transition.is_none()
+        {
+            Visibility::Hidden
+        } else {
+            Visibility::Visible
+        };
+    }
+
+    let (heading, contents) = if presentation.view == CardView::Offer {
+        (
+            "CUSTOMER TOW REQUEST".to_string(),
+            format!(
+                "FORM #{id:04}                         {status}\n\nVEHICLE     {vehicle}\nPICKUP      Road tile ({px}, {py})\nDELIVER TO  Road tile ({dx}, {dy})\nURGENCY     {urgency}\n\nDISTANCE    {total_tiles} tiles\nTIME        {duration:.1} min\nFUEL        {fuel:.2} gal\nEXPIRES     {remaining:.0} min  /  received {offer_age:.0} min ago\n\nPAYOUT      {payout}\nOPERATING   {costs}\nMARGIN      {margin}",
+                id = contract.id,
+                status = contract.state.label(),
+                vehicle = contract.vehicle.label(),
+                px = contract.pickup.x,
+                py = contract.pickup.y,
+                dx = contract.dropoff.x,
+                dy = contract.dropoff.y,
+                urgency = contract.urgency.label(),
+                duration = estimate.duration_secs,
+                fuel = estimate.fuel_gallons,
+                payout = format_money(contract.payout_cents),
+                costs = format_money(estimate.fuel_cost_cents + estimate.wear_reserve_cents),
+                margin = format_money(estimate.expected_margin_cents),
+            ),
+        )
+    } else {
+        let assignment = contract.assignment;
+        let assigned_truck = assignment
+            .map(|assignment| format!("Unit {}", assignment.truck_id.0))
+            .unwrap_or_else(|| "Unassigned".to_string());
+        let live = assignment
+            .and_then(|assignment| {
+                trucks
+                    .iter()
+                    .find(|(_, truck)| truck.id == assignment.truck_id)
+                    .map(|(_, truck)| {
+                        let distance = truck.odometer_tiles - assignment.odometer_start;
+                        let fuel = assignment.fuel_start - truck.fuel_gallons;
+                        (distance, fuel)
+                    })
+            })
+            .unwrap_or((0.0, 0.0));
+        let next_action = match contract.state {
+            TowState::Accepted => dispatch_note,
+            TowState::EnRoutePickup => "Driving to customer pickup".to_string(),
+            TowState::HookingUp => "Securing customer vehicle".to_string(),
+            TowState::EnRouteDropoff => "Towing to destination".to_string(),
+            TowState::Completed => "Delivery complete".to_string(),
+            TowState::Failed(reason) => format!("Resolve failure: {reason:?}"),
+            _ => contract.state.label().to_string(),
+        };
+        let elapsed = assignment
+            .map(|assignment| clock.elapsed_secs() - assignment.dispatched_at)
+            .unwrap_or(0.0);
+        let eta = (estimate.duration_secs - elapsed).max(0.0);
+        let receipt = if contract.state == TowState::Completed {
+            format!(
+                "\nRECEIPT  {} revenue - {} operating = {} contribution",
+                format_money(contract.payout_cents),
+                format_money(contract.actuals.operating_cost_cents()),
+                format_money(contract.payout_cents - contract.actuals.operating_cost_cents()),
+            )
+        } else {
+            String::new()
+        };
+        (
+            format!("ACTIVE JOB  #{:04}", contract.id),
+            format!(
+                "STATUS      {status}\nTRUCK       {assigned_truck}\nNEXT        {next_action}\n\nPICKUP      ({px}, {py})\nDROP-OFF    ({dx}, {dy})\nETA         {eta:.1} min\n\nLIVE DIST   {distance:.1} tiles\nLIVE FUEL   {fuel:.2} gal\nEST. COST   {costs}\nPAYOUT      {payout}{receipt}",
+                status = contract.state.label(),
+                px = contract.pickup.x,
+                py = contract.pickup.y,
+                dx = contract.dropoff.x,
+                dy = contract.dropoff.y,
+                distance = live.0,
+                fuel = live.1,
+                costs = format_money(estimate.fuel_cost_cents + estimate.wear_reserve_cents),
+                payout = format_money(contract.payout_cents),
+            ),
+        )
+    };
+
+    for mut text in title.iter_mut() {
+        *text = Text::new(heading.clone());
+    }
+    for mut text in body.iter_mut() {
+        *text = Text::new(format!(
+            "{contents}\n\nCOMPANY CASH  {}    REP  {}",
+            format_money(company.cash_cents),
+            company.reputation
         ));
+    }
+
+    let transitioning = presentation.transition.is_some();
+    for (action, interaction, mut color, mut visibility) in actions.iter_mut() {
+        let shown = !transitioning
+            && match action {
+                JobAction::Accept | JobAction::Reject => {
+                    presentation.view == CardView::Offer && contract.state == TowState::Offered
+                }
+                JobAction::Dispatch => {
+                    presentation.view == CardView::Active && contract.state == TowState::Accepted
+                }
+            };
+        *visibility = if shown {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+        let base = match action {
+            JobAction::Accept => Color::srgb(0.18, 0.43, 0.27),
+            JobAction::Reject => Color::srgb(0.50, 0.18, 0.14),
+            JobAction::Dispatch if !dispatch_ready => Color::srgb(0.35, 0.35, 0.32),
+            JobAction::Dispatch => Color::srgb(0.18, 0.38, 0.48),
+        };
+        color.0 = if *interaction == Interaction::Hovered && shown {
+            base.lighter(0.12)
+        } else {
+            base
+        };
+    }
+}
+
+pub fn update_pois(
+    time: Res<Time>,
+    contracts: Res<Contracts>,
+    mut markers: Query<(&JobPoi, &mut Transform, &mut Visibility)>,
+) {
+    for (marker, mut transform, mut visibility) in markers.iter_mut() {
+        let visible = poi_is_visible(contracts.current.state, marker.kind);
+        *visibility = if visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+        if visible {
+            let phase = match marker.kind {
+                JobPoiKind::Pickup => 0.0,
+                JobPoiKind::Dropoff => std::f32::consts::PI,
+            };
+            let pulse = 1.0 + (time.elapsed_secs() * 2.1 + phase).sin() * 0.12;
+            transform.scale = Vec3::splat(pulse);
+        }
+    }
+}
+
+fn poi_is_visible(state: TowState, kind: JobPoiKind) -> bool {
+    match state {
+        TowState::Accepted | TowState::EnRoutePickup | TowState::HookingUp => true,
+        TowState::EnRouteDropoff => kind == JobPoiKind::Dropoff,
+        _ => false,
     }
 }
 
@@ -631,5 +1070,38 @@ mod tests {
         assert!((contract.actuals.fuel_gallons - 2.4).abs() < 0.0001);
         assert_eq!(contract.actuals.operating_cost_cents(), 1_500);
         assert_eq!(contribution, 18_500);
+    }
+
+    #[test]
+    fn accepted_card_swipes_out_and_returns_as_active() {
+        let mut presentation = JobPresentation::default();
+        presentation.swipe_to(CardView::Active);
+
+        let outgoing = advance_card_transition(&mut presentation, 0.11);
+        assert_eq!(presentation.view, CardView::Offer);
+        assert!(outgoing > 0.0);
+
+        let incoming = advance_card_transition(&mut presentation, 0.22);
+        assert_eq!(presentation.view, CardView::Active);
+        assert!(incoming > 0.0);
+
+        assert_eq!(advance_card_transition(&mut presentation, 0.11), 0.0);
+        assert!(presentation.transition.is_none());
+    }
+
+    #[test]
+    fn job_pois_follow_contract_progress() {
+        assert!(!poi_is_visible(TowState::Offered, JobPoiKind::Pickup));
+        assert!(poi_is_visible(TowState::Accepted, JobPoiKind::Pickup));
+        assert!(poi_is_visible(TowState::Accepted, JobPoiKind::Dropoff));
+        assert!(!poi_is_visible(
+            TowState::EnRouteDropoff,
+            JobPoiKind::Pickup
+        ));
+        assert!(poi_is_visible(
+            TowState::EnRouteDropoff,
+            JobPoiKind::Dropoff
+        ));
+        assert!(!poi_is_visible(TowState::Completed, JobPoiKind::Dropoff));
     }
 }

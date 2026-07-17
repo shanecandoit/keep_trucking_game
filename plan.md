@@ -99,12 +99,31 @@ fleet action that requires it.
 - [x] Give each call an origin, destination, vehicle type, urgency, payout, and expiration time.
 - [ ] Ring the telephone and show an obvious unanswered-call state.
 - [ ] Let the player answer or miss a call.
-- [x] Show the first call's locations, vehicle, expected distance/time/cost, and quoted payout in the debug job panel.
-- [x] Let the player accept or decline the first debug job with keyboard controls.
+- [x] Show the first call's locations, vehicle, expected distance/time/cost, and quoted payout on the tablet request form.
+- [x] Let the player accept or decline the first tablet job with clickable controls and optional keyboard fallbacks.
 - [ ] Limit the number of active jobs the player can hold.
 - [x] Expire the current unanswered or unaccepted debug call using simulation time.
 - [ ] Apply a small reputation consequence for accepted jobs that are abandoned.
 - [ ] Log why a call was created, accepted, missed, completed, or failed.
+
+### Tablet Job Workflow
+
+Architecture decision: the tablet is a presentation of `TowContract`, not a
+second job state machine. Button actions request contract transitions; the card,
+map markers, enabled actions, and receipt are always projected from the current
+contract state.
+
+- [x] Replace the debug job text block with a dark tablet frame containing a warm paper-style tow request form.
+- [x] Show customer vehicle, pickup, dropoff, urgency, expiry, estimated time, fuel/cost, payout, and margin as labeled form fields.
+- [x] Add clickable `Accept` and `Reject` controls while the contract is offered; retain keyboard shortcuts as optional debug fallbacks.
+- [x] Animate an accepted form swiping away and an active-job card swiping in without changing contract state inside the animation.
+- [x] Swipe a rejected form offscreen while retaining the declined contract state for future job-history UI.
+- [x] Make the active card show status, assigned truck, pickup/dropoff, progress, next action, ETA, and live estimate-versus-actual cost.
+- [x] Expose contextual dispatch from the accepted card when a selected truck is eligible, with a visible blocked reason otherwise.
+- [x] Gently pulse distinct pickup and dropoff points of interest on the map after acceptance.
+- [x] Hide the pickup marker after hookup and hide both markers after completion, decline, expiration, or failure.
+- [x] Keep POI animation visual-time-only so pausing simulation does not make the interface look broken.
+- [ ] Add a reduced-motion option that replaces card swipes and POI pulses with immediate transitions and steady markers.
 
 ### Manual Tow Job
 
@@ -494,11 +513,12 @@ These are the next tasks that turn the current visual prototype into gameplay:
 - [ ] Give the starting gray building two parking spaces, one mechanic bay, and two office workspaces.
 - [ ] Make the route-target cone conditional on a selected, eligible truck and derive preview/click behavior from one shared `CommandTarget`.
 - [ ] Add the selected-truck clipboard card with status, resources, current job, next target, ETA, and contextual dispatch action.
-- [x] Seed one deterministic passenger-car tow offer and expose it through the debug job panel.
+- [x] Seed one deterministic passenger-car tow offer and expose it through the tablet request form.
 - [ ] Replace the debug offer controls with a ringing telephone and accept/decline UI.
+- [x] Replace the debug job panel with the tablet request form, swipe transition, active-job card, and state-driven glowing POIs.
 - [ ] Add one disabled civilian vehicle as a tow target.
 - [x] Implement the first tow-contract state machine.
-- [x] Let the player accept the debug call and dispatch the selected truck to it.
+- [x] Let the player accept the tablet call and dispatch the selected truck to it.
 - [x] Add hookup, towing, delivery, payout, and a debug receipt.
 - [x] Add fuel and simple aggregate wear based on actual travel.
 - [ ] Add one outside mechanic destination and repair invoice.

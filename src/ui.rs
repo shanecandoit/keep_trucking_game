@@ -28,6 +28,17 @@ pub struct FocusVisual {
 #[derive(Component)]
 pub struct ScreenPanel;
 
+pub fn capture_screen_pointer(
+    mut focus: ResMut<Focus>,
+    panels: Query<&Interaction, (With<ScreenPanel>, Without<Button>)>,
+    buttons: Query<&Interaction, With<Button>>,
+) {
+    focus.pointer_over_ui = panels
+        .iter()
+        .chain(buttons.iter())
+        .any(|interaction| *interaction != Interaction::None);
+}
+
 #[derive(Clone, Copy)]
 pub enum FocusVisualKind {
     SelectedTile,

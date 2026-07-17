@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::SimClock;
-use crate::ui::{Focus, ScreenPanel};
+use crate::ui::ScreenPanel;
 
 const PANEL_BACKGROUND: Color = Color::srgba(0.055, 0.05, 0.04, 0.92);
 const BUTTON_IDLE: Color = Color::srgb(0.20, 0.19, 0.16);
@@ -111,19 +111,9 @@ fn spawn_button(panel: &mut ChildSpawnerCommands, control: TimeControl, label: &
 
 pub fn update(
     mut clock: ResMut<SimClock>,
-    mut focus: ResMut<Focus>,
     mut clock_text: Query<&mut Text, With<GameClockText>>,
-    panels: Query<&Interaction, (With<ScreenPanel>, Without<Button>)>,
     mut controls: TimeControlQuery,
 ) {
-    let pointer_over_panel = panels
-        .iter()
-        .any(|interaction| *interaction != Interaction::None);
-    let pointer_over_control = controls
-        .iter()
-        .any(|(interaction, _, _)| *interaction != Interaction::None);
-    focus.pointer_over_ui = pointer_over_panel || pointer_over_control;
-
     for (interaction, control, _) in controls.iter() {
         if *interaction == Interaction::Pressed {
             control.apply(&mut clock);

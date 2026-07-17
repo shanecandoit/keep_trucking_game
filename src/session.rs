@@ -4,7 +4,6 @@ pub const DEFAULT_SEED: u64 = 0x4B45_4550_5452_554B;
 
 #[derive(Resource)]
 pub struct GameSession {
-    pub seed: u64,
     random_state: u64,
     next_contract_id: u64,
 }
@@ -12,7 +11,6 @@ pub struct GameSession {
 impl GameSession {
     pub fn new(seed: u64) -> Self {
         Self {
-            seed,
             random_state: seed,
             next_contract_id: 1,
         }
