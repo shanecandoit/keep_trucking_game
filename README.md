@@ -5,6 +5,11 @@ Prototype controls: left-click the truck and a road/building to route it,
 right-drag to pan, use the mouse wheel to zoom, and press Space to cycle the
 simulation between paused, normal, and fast speed.
 
+Build the native game with `./build.sh`. For a browser build, install
+`wasm32-unknown-unknown` and the matching `wasm-bindgen-cli`, then run
+`./build.sh wasm`. The web bundle is written to `web/` and must be served over
+HTTP, for example with `python -m http.server 8080 --directory web`.
+
 ## 1. Vibe
 
 Blue-collar logistics sim. You start with a beat-up tow truck answering emergency calls, and end up owning the highways your entire fleet drives on. The feeling we're chasing: **competence made visible** - watching a system you built (roads, drivers, routes) run smoother because you earned it, not because you got lucky.

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Keep Trucking</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #1f1a12;
+      }
+
+      canvas {
+        display: block;
+        width: 100vw !important;
+        height: 100vh !important;
+        touch-action: none;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      import init from "./pkg/keep_trucking.js";
+
+      init().catch((error) => {
+        console.error("Keep Trucking failed to start", error);
+      });
+    </script>
+  </body>
+</html>
