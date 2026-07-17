@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 pub const TILE_WIDTH: f32 = 54.0;
 pub const TILE_HEIGHT: f32 = 27.0;
+pub const ROAD_STEP_WORLD: f32 = 30.186_918;
 const BUILDING_HALF_WIDTH: f32 = 42.0;
 const BUILDING_HALF_HEIGHT: f32 = 35.0;
 const BUILDING_GAP: f32 = 2.0;

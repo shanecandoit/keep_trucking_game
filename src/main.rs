@@ -1,5 +1,8 @@
 mod camera;
+mod company;
 mod debug;
+mod jobs;
+mod session;
 mod truck;
 mod ui;
 mod world;
@@ -85,13 +88,29 @@ fn main() {
         .insert_resource(camera::PanState::default())
         .insert_resource(ui::Focus::default())
         .insert_resource(SimClock::default())
+        .insert_resource(Time::<Fixed>::from_hz(10.0))
+        .insert_resource(session::GameSession::default())
+        .insert_resource(company::Company::default())
         .insert_resource(ClearColor(Color::srgb(0.12, 0.10, 0.07)))
-        .add_systems(Startup, render)
+        .add_systems(Startup, (render, jobs::setup).chain())
         .add_systems(Update, update)
+        .add_systems(Update, jobs::handle_input.after(update))
+        .add_systems(Update, jobs::update_debug.after(jobs::handle_input))
         .add_systems(Update, truck::sync_route_debug.after(update))
         .add_systems(Update, camera::zoom)
         .add_systems(Update, debug::update_pause)
+        .add_systems(FixedUpdate, simulate)
+        .add_systems(FixedUpdate, jobs::update_contracts.after(simulate))
         .run();
+}
+
+fn simulate(
+    time: Res<Time<Fixed>>,
+    mut sim_clock: ResMut<SimClock>,
+    mut trucks: Query<(Entity, &mut Transform, &mut truck::Truck)>,
+) {
+    sim_clock.tick(time.delta_secs());
+    truck::update(sim_clock.delta_secs(), &mut trucks);
 }
 
 /// High-level gameplay update. Domain modules own the details of each update.
@@ -121,8 +140,6 @@ fn update(
     if keys.just_pressed(KeyCode::Space) {
         sim_clock.cycle_speed();
     }
-    sim_clock.tick(time.delta_secs());
-
     camera::update(&buttons, windows, &mut camera_transforms, &mut pan_state);
     ui::update(
         &buttons,
@@ -153,7 +170,6 @@ fn update(
         &focus,
         &map,
     );
-    truck::update(sim_clock.delta_secs(), &mut trucks);
 }
 
 /// High-level scene construction. Bevy handles frame rendering after this.

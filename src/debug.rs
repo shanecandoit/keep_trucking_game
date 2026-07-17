@@ -7,6 +7,9 @@ use crate::world;
 
 use super::SimClock;
 
+const DEBUG_PANEL_BACKGROUND: Color = Color::srgba(0.055, 0.05, 0.04, 0.88);
+const DEBUG_PANEL_TEXT: Color = Color::srgb(0.92, 0.90, 0.84);
+
 #[derive(Component)]
 pub struct DebugStats;
 
@@ -20,20 +23,38 @@ pub fn render(commands: &mut Commands) {
     commands.spawn((
         Text::new(""),
         DebugStats,
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
+        TextColor(DEBUG_PANEL_TEXT),
+        BackgroundColor(DEBUG_PANEL_BACKGROUND),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(24.0),
             left: Val::Px(24.0),
+            width: Val::Px(310.0),
+            min_height: Val::Px(152.0),
+            padding: UiRect::all(Val::Px(10.0)),
             ..default()
         },
     ));
     commands.spawn((
         Text::new(""),
         DebugCursor,
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
+        TextColor(DEBUG_PANEL_TEXT),
+        BackgroundColor(DEBUG_PANEL_BACKGROUND),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(24.0),
             right: Val::Px(24.0),
+            width: Val::Px(290.0),
+            min_height: Val::Px(126.0),
+            padding: UiRect::all(Val::Px(10.0)),
             ..default()
         },
     ));
@@ -55,7 +76,10 @@ pub fn render(commands: &mut Commands) {
     ));
 }
 
-pub fn update_pause(sim_clock: Res<SimClock>, mut overlay: Query<&mut Visibility, With<PauseOverlay>>) {
+pub fn update_pause(
+    sim_clock: Res<SimClock>,
+    mut overlay: Query<&mut Visibility, With<PauseOverlay>>,
+) {
     let visible = sim_clock.is_paused();
     for mut visibility in overlay.iter_mut() {
         *visibility = if visible {
@@ -80,7 +104,6 @@ pub fn update(
 ) {
     let truck_count = trucks.iter().count();
     let fps = 1.0 / time.delta_secs();
-
 
     let selected_line = match focus.selected {
         Some(entity) => {
@@ -113,7 +136,7 @@ pub fn update(
 
     for mut text in debug_stats.iter_mut() {
         *text = Text::new(format!(
-            "FPS: {fps:.0}\nentities (trucks): {truck_count}\nsim time: {:.1}s ({})\n{}",
+            "FPS: {fps:>4.0}\nentities (trucks): {truck_count:>3}\nsim time: {:>8.1}s ({})\n{}",
             sim_clock.elapsed_secs(),
             sim_clock.speed_label(),
             selected_line
@@ -138,7 +161,7 @@ pub fn update(
 
     for mut text in debug_cursor.iter_mut() {
         *text = Text::new(format!(
-            "Mouse debug:\nscreen: ({:.0}, {:.0})\niso world: ({:.1}, {:.1})\ntop-down: ({:.2}, {:.2})\ntile: ({}, {}){}",
+            "Mouse debug\nscreen:    ({:>5.0}, {:>5.0})\niso world: ({:>7.1}, {:>7.1})\ntop-down:  ({:>6.2}, {:>6.2})\ntile:      ({:>3}, {:>3}){}",
             screen.x,
             screen.y,
             iso_world.x,

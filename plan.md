@@ -43,10 +43,11 @@ Goal: establish a readable isometric world with selectable, road-constrained veh
 - [x] Separate background, background UI, foreground, and foreground UI draw passes.
 - [x] Test isometric projection round trips.
 - [x] Replace the temporary cross-shaped road layout with map data.
-- [ ] Add a fixed simulation tick separate from frame rendering.
-- [ ] Add pause, normal speed, and fast-forward controls.
-- [ ] Add a seeded game-session resource.
-- [ ] Add an in-game debug panel for simulation time, selected entity, route, and current task.
+- [x] Add a fixed simulation tick separate from frame rendering.
+- [x] Add pause, normal speed, and fast-forward controls.
+- [x] Add a seeded game-session resource.
+- [x] Add an in-game debug panel for simulation time, selected entity, route, and current task.
+- [x] Anchor changing diagnostic readouts in fixed-width screen-space Bevy UI panels.
 
 Exit condition: the player can select a truck, choose a reachable destination, and understand the terrain, road, selection, and building layers.
 
@@ -59,7 +60,7 @@ Goal: the player answers the phone, accepts a tow call, drives the starting truc
 - [ ] Add a game clock with hour, minute, and day.
 - [ ] Define business hours and after-hours calls.
 - [ ] Add pause and speed controls to foreground UI.
-- [ ] Make contract deadlines use simulation time rather than wall-clock time.
+- [x] Make contract deadlines use simulation time rather than wall-clock time.
 - [ ] End the day with a simple income-and-expense summary.
 
 ### Starting Company
@@ -73,34 +74,53 @@ Goal: the player answers the phone, accepts a tow call, drives the starting truc
 - [ ] Prevent purchases and hires that exceed building capacity.
 - [ ] Show current capacity in the building panel.
 
+### Map Commands and Selected-Truck Clipboard
+
+Architecture decision: direct map commands operate on one selected truck. Keep
+`Focus.selected` as a single selection; use the dispatch board and garage UI for
+fleet-wide work instead of adding RTS-style group selection without a concrete
+fleet action that requires it.
+
+- [ ] Replace the unconditional hover cone with a command-target preview that appears only while an idle, manually controllable truck is selected.
+- [ ] Resolve the cursor tile once into a shared `CommandTarget`: road tile or building entrance, reachable route, and an explicit blocked reason.
+- [ ] Use the same `CommandTarget` for both preview rendering and click execution so the displayed destination cannot disagree with the assigned route.
+- [ ] Draw the cone at a building's resolved road entrance rather than its building tile.
+- [ ] Hide the command cone while the selected truck has an active tow assignment; keep contract pickup, route, and destination markers visible instead.
+- [ ] Show a small invalid/unreachable marker, or no command marker, when clicking would not issue a route.
+- [ ] Add an onscreen clipboard card when a truck is selected and remove it when selection is cleared.
+- [ ] Make the clipboard status-first: truck/unit identity, player or assigned driver, availability/current task, fuel, aggregate wear, odometer, active job, next target, and ETA.
+- [ ] Show `Dispatch to Job` on the clipboard only when an accepted unassigned job exists and the selected truck is eligible.
+- [ ] Explain disabled clipboard actions with the actual reason: already assigned, insufficient fuel, incompatible capacity, unreachable pickup, or unavailable driver.
+- [ ] Keep the clipboard scoped to one truck; later fleet summaries belong in the garage and dispatch queue rather than expanding this card into a fleet window.
+
 ### Telephone and Dispatch
 
 - [ ] Generate incoming tow calls at a basic random rate.
-- [ ] Give each call an origin, destination, vehicle type, urgency, payout, and expiration time.
+- [x] Give each call an origin, destination, vehicle type, urgency, payout, and expiration time.
 - [ ] Ring the telephone and show an obvious unanswered-call state.
 - [ ] Let the player answer or miss a call.
-- [ ] Show customer location, problem, expected distance, and quoted payout.
-- [ ] Let the player accept or decline the job.
+- [x] Show the first call's locations, vehicle, expected distance/time/cost, and quoted payout in the debug job panel.
+- [x] Let the player accept or decline the first debug job with keyboard controls.
 - [ ] Limit the number of active jobs the player can hold.
-- [ ] Expire unanswered and unaccepted calls.
+- [x] Expire the current unanswered or unaccepted debug call using simulation time.
 - [ ] Apply a small reputation consequence for accepted jobs that are abandoned.
 - [ ] Log why a call was created, accepted, missed, completed, or failed.
 
 ### Manual Tow Job
 
-- [ ] Add a `TowContract` state machine: `Offered`, `Accepted`, `EnRoute`, `HookingUp`, `Towing`, `Delivered`, `Failed`.
+- [x] Add a `TowContract` state machine covering offered, accepted, pickup travel, hookup, towing, completion, decline, expiration, and visible failure reasons.
 - [ ] Spawn a disabled customer vehicle at the call origin.
 - [ ] Highlight the call origin after accepting the job.
-- [ ] Let the player dispatch the starting truck to the call.
-- [ ] Show the truck's planned route.
-- [ ] Detect arrival within the correct roadside service area.
-- [ ] Add a short hookup timer.
+- [x] Let the player dispatch the selected starting truck to the call.
+- [x] Show the truck's planned route.
+- [x] Detect arrival at the correct roadside service tile.
+- [x] Add a short hookup timer.
 - [ ] Attach the customer vehicle visually behind the tow truck.
-- [ ] Route the tow truck to the requested mechanic or destination.
+- [x] Route the tow truck to the requested destination after hookup.
 - [ ] Detach and deliver the customer vehicle.
-- [ ] Pay the player only after successful delivery.
-- [ ] Apply fuel use and truck wear from distance traveled.
-- [ ] Show a completion receipt with payout, distance, time, fuel, and wear.
+- [x] Pay the player only after successful delivery.
+- [x] Apply fuel use and aggregate truck wear from actual distance traveled.
+- [x] Show a debug completion receipt with payout, distance, time, fuel cost, wear reserve, and contribution margin.
 
 ### First-Day Tutorial
 
@@ -468,15 +488,19 @@ Exit condition: each new tier adds a distinct operating problem and feeds demand
 
 These are the next tasks that turn the current visual prototype into gameplay:
 
-- [ ] Add a fixed simulation clock with pause and speed controls.
-- [ ] Add `Company`, `Truck`, `Employee`, and `TowContract` domain models.
+- [x] Add a fixed simulation clock with pause and speed controls.
+- [x] Add minimum `Company`, `Truck`, and `TowContract` vertical-slice domain models.
+- [ ] Add the `Employee` domain model and expand company property/capacity state.
 - [ ] Give the starting gray building two parking spaces, one mechanic bay, and two office workspaces.
-- [ ] Add a telephone with one generated tow-call type.
+- [ ] Make the route-target cone conditional on a selected, eligible truck and derive preview/click behavior from one shared `CommandTarget`.
+- [ ] Add the selected-truck clipboard card with status, resources, current job, next target, ETA, and contextual dispatch action.
+- [x] Seed one deterministic passenger-car tow offer and expose it through the debug job panel.
+- [ ] Replace the debug offer controls with a ringing telephone and accept/decline UI.
 - [ ] Add one disabled civilian vehicle as a tow target.
-- [ ] Implement the tow-contract state machine.
-- [ ] Let the player accept a call and route the truck to it.
-- [ ] Add hookup, towing, delivery, and payout.
-- [ ] Add fuel and simple aggregate wear.
+- [x] Implement the first tow-contract state machine.
+- [x] Let the player accept the debug call and dispatch the selected truck to it.
+- [x] Add hookup, towing, delivery, payout, and a debug receipt.
+- [x] Add fuel and simple aggregate wear based on actual travel.
 - [ ] Add one outside mechanic destination and repair invoice.
 - [ ] Add an end-of-day financial summary.
 - [ ] Save and load the vertical-slice state.

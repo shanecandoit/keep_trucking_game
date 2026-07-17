@@ -13,6 +13,12 @@ const TRUCK_SCALE: f32 = 0.62;
 // tied to the visible road scale makes cross-town routes feel consequential.
 const TRUCK_SPEED: f32 = 65.0;
 const ROUTE_DOT_Z: f32 = 1.25;
+pub const FUEL_GALLONS_PER_TILE: f32 = 0.08;
+pub const WEAR_PER_TILE: f32 = 0.002;
+pub const STARTING_FUEL_GALLONS: f32 = 24.0;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TruckId(pub u64);
 
 #[derive(Resource)]
 pub struct RouteDebugAssets {
@@ -37,7 +43,12 @@ pub struct RouteDebug<'w, 's> {
 
 #[derive(Component)]
 pub struct Truck {
+    pub id: TruckId,
     pub route: Vec<Vec3>,
+    pub fuel_gallons: f32,
+    pub wear: f32,
+    pub odometer_tiles: f32,
+    pub active_contract: Option<u64>,
     route_revision: u64,
 }
 
@@ -61,7 +72,12 @@ pub fn draw_trucks(
             Transform::from_translation(world::grid_to_world(map, start).extend(3.0))
                 .with_scale(Vec3::splat(TRUCK_SCALE)),
             Truck {
+                id: TruckId(1),
                 route: Vec::new(),
+                fuel_gallons: STARTING_FUEL_GALLONS,
+                wear: 0.0,
+                odometer_tiles: 0.0,
+                active_contract: None,
                 route_revision: 0,
             },
         ))
@@ -118,9 +134,13 @@ pub fn draw_trucks(
 
 pub fn update(sim_delta: f32, trucks: &mut Query<(Entity, &mut Transform, &mut Truck)>) {
     for (_entity, mut transform, mut truck) in trucks.iter_mut() {
+        if truck.fuel_gallons <= 0.0 {
+            continue;
+        }
         let Some(destination) = truck.route.first().copied() else {
             continue;
         };
+        let previous = transform.translation;
         let distance = transform.translation.distance(destination);
         let step = TRUCK_SPEED * sim_delta;
         if distance <= step {
@@ -129,6 +149,10 @@ pub fn update(sim_delta: f32, trucks: &mut Query<(Entity, &mut Transform, &mut T
         } else {
             transform.translation = transform.translation.move_towards(destination, step);
         }
+        let distance_tiles = previous.distance(transform.translation) / world::ROAD_STEP_WORLD;
+        truck.odometer_tiles += distance_tiles;
+        truck.fuel_gallons = (truck.fuel_gallons - distance_tiles * FUEL_GALLONS_PER_TILE).max(0.0);
+        truck.wear += distance_tiles * WEAR_PER_TILE;
     }
 }
 
@@ -164,31 +188,45 @@ pub fn update_clicks(
         if focus.selected != Some(entity) {
             continue;
         }
+        if truck.active_contract.is_some() {
+            warn!(truck = ?truck.id, "manual route ignored while truck has an active tow contract");
+            continue;
+        }
         let start = world::world_to_grid(map, transform.translation.truncate());
-        if let Some(path) = world::road_path(map, start, target) {
-            info!(
-                ?start,
-                ?target,
-                waypoints = path.len(),
-                "truck route assigned"
-            );
-            truck.route = path
-                .into_iter()
-                .skip(1)
-                .map(|grid| world::grid_to_world(map, grid).extend(3.0))
-                .collect();
-            truck.route_revision = truck.route_revision.wrapping_add(1);
-            let assets = &debug.assets;
-            spawn_route_debug(
-                &mut debug.commands,
-                entity,
-                truck.route_revision,
-                &truck.route,
-                assets,
-            );
+        if let Some(waypoints) = debug.assign_route(map, entity, &transform, &mut truck, target) {
+            info!(?start, ?target, waypoints, "truck route assigned");
         } else {
             warn!(?start, ?target, "no road route found for truck");
         }
+    }
+}
+
+impl RouteDebug<'_, '_> {
+    pub fn assign_route(
+        &mut self,
+        map: &world::TownMap,
+        entity: Entity,
+        transform: &Transform,
+        truck: &mut Truck,
+        target: IVec2,
+    ) -> Option<usize> {
+        let start = world::world_to_grid(map, transform.translation.truncate());
+        let path = world::road_path(map, start, target)?;
+        truck.route = path
+            .into_iter()
+            .skip(1)
+            .map(|grid| world::grid_to_world(map, grid).extend(3.0))
+            .collect();
+        truck.route_revision = truck.route_revision.wrapping_add(1);
+        let assets = &self.assets;
+        spawn_route_debug(
+            &mut self.commands,
+            entity,
+            truck.route_revision,
+            &truck.route,
+            assets,
+        );
+        Some(truck.route.len())
     }
 }
 
