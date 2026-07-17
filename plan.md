@@ -57,9 +57,9 @@ Goal: the player answers the phone, accepts a tow call, drives the starting truc
 
 ### Time and Day
 
-- [ ] Add a game clock with hour, minute, and day.
+- [x] Add a game clock with day, hour, and minute; start Day 1 at 08:00 and advance one game minute per simulation second.
 - [ ] Define business hours and after-hours calls.
-- [ ] Add pause and speed controls to foreground UI.
+- [x] Add fixed bottom-left pause, 1x, and 3x controls to foreground UI.
 - [x] Make contract deadlines use simulation time rather than wall-clock time.
 - [ ] End the day with a simple income-and-expense summary.
 

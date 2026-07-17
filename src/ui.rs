@@ -17,12 +17,16 @@ pub struct Focus {
     pub selected: Option<Entity>,
     pub hovered: Option<IVec2>,
     pub click_consumed: bool,
+    pub pointer_over_ui: bool,
 }
 
 #[derive(Component)]
 pub struct FocusVisual {
     pub kind: FocusVisualKind,
 }
+
+#[derive(Component)]
+pub struct ScreenPanel;
 
 #[derive(Clone, Copy)]
 pub enum FocusVisualKind {
@@ -86,7 +90,7 @@ pub fn update(
     >,
     map: &world::TownMap,
 ) {
-    focus.click_consumed = false;
+    focus.click_consumed = focus.pointer_over_ui;
 
     let Ok(window) = windows.single() else {
         update_visuals(focus, &trucks, visuals, map);

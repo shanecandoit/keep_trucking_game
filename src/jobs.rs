@@ -4,7 +4,7 @@ use crate::SimClock;
 use crate::company::{Company, format_money};
 use crate::session::GameSession;
 use crate::truck::{FUEL_GALLONS_PER_TILE, RouteDebug, Truck, TruckId, WEAR_PER_TILE};
-use crate::ui::Focus;
+use crate::ui::{Focus, ScreenPanel};
 use crate::world;
 
 const OFFER_LIFETIME_SECS: f32 = 180.0;
@@ -276,10 +276,12 @@ pub fn setup(mut commands: Commands, map: Res<world::TownMap>, mut session: ResM
         },
         TextColor(Color::srgb(0.96, 0.91, 0.78)),
         BackgroundColor(Color::srgba(0.055, 0.05, 0.04, 0.90)),
+        Interaction::default(),
+        ScreenPanel,
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(24.0),
-            bottom: Val::Px(24.0),
+            bottom: Val::Px(110.0),
             width: Val::Px(620.0),
             min_height: Val::Px(146.0),
             padding: UiRect::all(Val::Px(12.0)),
@@ -456,7 +458,7 @@ pub fn update_debug(
     };
     let receipt = if contract.state == TowState::Completed {
         format!(
-            "\nACTUAL  distance {:.1} tiles | time {:.1}s | fuel {:.2} gal\nCosts {} fuel + {} wear | contribution {}",
+            "\nACTUAL  distance {:.1} tiles | time {:.1} min | fuel {:.2} gal\nCosts {} fuel + {} wear | contribution {}",
             contract.actuals.approach_tiles + contract.actuals.tow_tiles,
             contract.actuals.duration_secs,
             contract.actuals.fuel_gallons,
@@ -470,7 +472,7 @@ pub fn update_debug(
 
     for mut output in text.iter_mut() {
         *output = Text::new(format!(
-            "TOW CALL #{id} [{state}]  seed {seed:016X}\n{vehicle} | {urgency} | offered {offer_age:.0}s ago | expires in {remaining:.0}s\npickup ({px}, {py}) -> dropoff ({dx}, {dy})\nESTIMATE  {total_tiles} tiles | {duration:.1}s | {fuel:.2} gal\nPayout {payout} | costs {costs} | margin {margin}\nCompany {cash} | reputation {reputation}\n{controls}{receipt}",
+            "TOW CALL #{id} [{state}]  seed {seed:016X}\n{vehicle} | {urgency} | offered {offer_age:.0} min ago | expires in {remaining:.0} min\npickup ({px}, {py}) -> dropoff ({dx}, {dy})\nESTIMATE  {total_tiles} tiles | {duration:.1} min | {fuel:.2} gal\nPayout {payout} | costs {costs} | margin {margin}\nCompany {cash} | reputation {reputation}\n{controls}{receipt}",
             id = contract.id,
             state = contract.state.label(),
             seed = session.seed,

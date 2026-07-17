@@ -3,6 +3,7 @@ mod company;
 mod debug;
 mod jobs;
 mod session;
+mod time_ui;
 mod truck;
 mod ui;
 mod world;
@@ -53,6 +54,32 @@ impl SimClock {
             SimSpeed::Fast => SimSpeed::Paused,
         };
     }
+
+    pub fn pause(&mut self) {
+        self.speed = SimSpeed::Paused;
+    }
+
+    pub fn play_normal(&mut self) {
+        self.speed = SimSpeed::Normal;
+    }
+
+    pub fn play_fast(&mut self) {
+        self.speed = SimSpeed::Fast;
+    }
+
+    pub fn day_time(&self) -> (u64, u32, u32) {
+        const START_MINUTE: u64 = 8 * 60;
+        const MINUTES_PER_DAY: u64 = 24 * 60;
+
+        let total_minutes = START_MINUTE + self.elapsed.max(0.0).floor() as u64;
+        let day = total_minutes / MINUTES_PER_DAY + 1;
+        let minute_of_day = total_minutes % MINUTES_PER_DAY;
+        (
+            day,
+            (minute_of_day / 60) as u32,
+            (minute_of_day % 60) as u32,
+        )
+    }
 }
 
 #[derive(Default, Clone, Copy)]
@@ -94,6 +121,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.12, 0.10, 0.07)))
         .add_systems(Startup, (render, jobs::setup).chain())
         .add_systems(Update, update)
+        .add_systems(Update, time_ui::update.before(update))
         .add_systems(Update, jobs::handle_input.after(update))
         .add_systems(Update, jobs::update_debug.after(jobs::handle_input))
         .add_systems(Update, truck::sync_route_debug.after(update))
@@ -232,4 +260,32 @@ fn draw_fg(
 fn draw_fg_ui(commands: &mut Commands) {
     // Reserved for actor/status UI that should render above trucks/buildings.
     ui::draw_fg_ui(commands);
+    time_ui::render(commands);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn game_clock_starts_at_eight_and_rolls_into_the_next_day() {
+        let mut clock = SimClock::default();
+        assert_eq!(clock.day_time(), (1, 8, 0));
+
+        clock.play_normal();
+        clock.tick(16.0 * 60.0);
+
+        assert_eq!(clock.day_time(), (2, 0, 0));
+    }
+
+    #[test]
+    fn direct_time_controls_select_the_requested_speed() {
+        let mut clock = SimClock::default();
+        clock.play_normal();
+        assert_eq!(clock.speed_label(), "1x");
+        clock.play_fast();
+        assert_eq!(clock.speed_label(), "3x");
+        clock.pause();
+        assert!(clock.is_paused());
+    }
 }

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
 use crate::truck::Truck;
-use crate::ui::Focus;
+use crate::ui::{Focus, ScreenPanel};
 use crate::world;
 
 use super::SimClock;
@@ -29,6 +29,8 @@ pub fn render(commands: &mut Commands) {
         },
         TextColor(DEBUG_PANEL_TEXT),
         BackgroundColor(DEBUG_PANEL_BACKGROUND),
+        Interaction::default(),
+        ScreenPanel,
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(24.0),
@@ -48,6 +50,8 @@ pub fn render(commands: &mut Commands) {
         },
         TextColor(DEBUG_PANEL_TEXT),
         BackgroundColor(DEBUG_PANEL_BACKGROUND),
+        Interaction::default(),
+        ScreenPanel,
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(24.0),
