@@ -13,6 +13,43 @@ The player begins as an owner-operator with one worn tow truck, a tiny garage, a
 
 The core fantasy is not passive number growth. It is seeing a company and city run better because the player chose the right people, trucks, routes, maintenance, and infrastructure.
 
+## Next Playable Loop
+
+Before expanding into employees, fleet purchasing, procedural cities, or detailed
+traffic, make one owner-operator tow feel physically and economically complete.
+The next playtest should answer: "Would I willingly play another in-game day?"
+
+The intended short loop is:
+
+1. The telephone rings and presents a tow request.
+2. The player evaluates the location, deadline, payout, travel time, fuel, and wear.
+3. The player accepts or rejects the job.
+4. The player selects the truck and dispatches it through a clear, shared map command.
+5. The truck reaches a visible disabled vehicle, hooks it up, and visibly tows it.
+6. The vehicle is detached and delivered at the requested destination.
+7. The company receives payment and records actual time, fuel, wear, and margin.
+8. The player chooses whether to continue working, refuel, seek outside repair, or end the day.
+9. An end-of-day ledger explains revenue, expenses, reputation, and truck condition.
+
+### Immediate Design Priorities
+
+- [ ] Spawn a disabled customer vehicle at the contract pickup and give it an obvious stranded state.
+- [ ] Show hookup, a visible connection to the tow truck, towing movement, detachment, and delivery.
+- [ ] Make map command preview conditional on one selected eligible truck and resolve preview and execution from one shared command target.
+- [ ] Add a selected-truck clipboard showing status, fuel, wear, current job, next target, ETA, and contextual actions.
+- [ ] Add an outside mechanic quote with visible price, downtime, and expected condition change.
+- [ ] Let the player continue working, refuel, approve repair, or end the day after a completed tow.
+- [ ] Add an end-of-day ledger for calls, revenue, fuel, wear or repairs, net income, reputation, and closing truck condition.
+- [ ] Add a second tow offer with a meaningful accept-or-reject tradeoff such as distance, deadline, fuel, road access, or closing time.
+
+### Playtest Guardrails
+
+- [ ] Do not make accepting every offered job automatically correct.
+- [ ] Make the stranded vehicle and completed delivery readable in the world, not only in UI state.
+- [ ] Explain every disabled action and financial consequence before the player commits.
+- [ ] Use visible wear and known operating costs before introducing random breakdowns.
+- [ ] Defer employees, additional trucks, procedural generation, and detailed traffic until two or three consecutive owner-operator jobs are enjoyable.
+
 ## Planning Rules
 
 - [ ] Each phase must end in a playable milestone.
